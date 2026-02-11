@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.grc~
+venv/
+build/
+dist/
+.env
+todo.md
+log.md
+notes.md
+*.png
