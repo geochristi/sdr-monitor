@@ -33,11 +33,35 @@ options:
     state: enabled
 
 blocks:
+- name: Modulation
+  id: variable
+  parameters:
+    comment: ''
+    value: '2'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [448, 16.0]
+    rotation: 0
+    state: enabled
+- name: bits_per_symbol
+  id: variable
+  parameters:
+    comment: ''
+    value: int(math.log2(Modulation))
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [560, 16.0]
+    rotation: 0
+    state: enabled
 - name: noise_voltage
   id: variable
   parameters:
     comment: ''
-    value: '0.6'
+    value: '0.7'
   states:
     bus_sink: false
     bus_source: false
@@ -138,7 +162,7 @@ blocks:
     comment: ''
     endianness: gr.GR_LSB_FIRST
     k: '8'
-    l: '2'
+    l: bits_per_symbol
     len_tag_key: packet_len
     maxoutbuf: '0'
     minoutbuf: '0'
@@ -217,7 +241,7 @@ blocks:
     affinity: ''
     alias: ''
     comment: ''
-    constellation: digital.constellation_qpsk().base()
+    constellation: digital.constellation_bpsk().base() if Modulation==2 else digital.constellation_qpsk().base()
     maxoutbuf: '0'
     minoutbuf: '0'
   states:
@@ -233,7 +257,7 @@ blocks:
     affinity: ''
     alias: ''
     comment: ''
-    constellation: digital.constellation_qpsk().base()
+    constellation: digital.constellation_bpsk().base() if Modulation==2 else digital.constellation_qpsk().base()
     maxoutbuf: '0'
     minoutbuf: '0'
   states:
@@ -252,7 +276,7 @@ blocks:
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
-    modulus: '4'
+    modulus: Modulation
   states:
     bus_sink: false
     bus_source: false
@@ -269,7 +293,7 @@ blocks:
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
-    modulus: '4'
+    modulus: Modulation
   states:
     bus_sink: false
     bus_source: false
@@ -405,6 +429,19 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [1344, 112.0]
+    rotation: 0
+    state: enabled
+- name: import_0
+  id: import
+  parameters:
+    alias: ''
+    comment: ''
+    imports: import math
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [696, 24.0]
     rotation: 0
     state: enabled
 - name: pdu_pdu_to_tagged_stream_0
