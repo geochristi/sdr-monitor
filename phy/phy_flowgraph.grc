@@ -28,36 +28,16 @@ options:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [8, 8]
+    coordinate: [0, 8.0]
     rotation: 0
     state: enabled
 
 blocks:
-- name: constellation
-  id: variable_constellation
-  parameters:
-    comment: ''
-    const_points: '[-1-1j, -1+1j, 1+1j, 1-1j]'
-    dims: '1'
-    normalization: digital.constellation.AMPLITUDE_NORMALIZATION
-    npwr: '1.0'
-    precision: '8'
-    rot_sym: '4'
-    soft_dec_lut: None
-    sym_map: '[0, 1, 3, 2]'
-    type: qpsk
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [480, 20.0]
-    rotation: 0
-    state: enabled
 - name: noise_voltage
   id: variable
   parameters:
     comment: ''
-    value: '0.0001'
+    value: '0.9'
   states:
     bus_sink: false
     bus_source: false
@@ -77,6 +57,43 @@ blocks:
     coordinate: [184, 12]
     rotation: 0
     state: enabled
+- name: analog_noise_source_x_0
+  id: analog_noise_source_x
+  parameters:
+    affinity: ''
+    alias: ''
+    amp: '1'
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    noise_type: analog.GR_GAUSSIAN
+    seed: '0'
+    type: complex
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [160, 488.0]
+    rotation: 0
+    state: enabled
+- name: blocks_add_xx_0
+  id: blocks_add_xx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_inputs: '2'
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1064, 496.0]
+    rotation: 0
+    state: enabled
 - name: blocks_message_strobe_0
   id: blocks_message_strobe
   parameters:
@@ -86,12 +103,30 @@ blocks:
     maxoutbuf: '0'
     minoutbuf: '0'
     msg: pmt.intern("TEST")
-    period: '10000'
+    period: '1000'
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
     coordinate: [72, 344.0]
+    rotation: 0
+    state: enabled
+- name: blocks_multiply_const_vxx_0
+  id: blocks_multiply_const_vxx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    const: noise_voltage
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [352, 504.0]
     rotation: 0
     state: enabled
 - name: blocks_repack_bits_bb_0
@@ -111,7 +146,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [760, 344.0]
+    coordinate: [760, 336.0]
     rotation: 0
     state: enabled
 - name: blocks_repack_bits_bb_1
@@ -131,9 +166,9 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [416, 792.0]
+    coordinate: [856, 664.0]
     rotation: 0
-    state: enabled
+    state: disabled
 - name: blocks_throttle2_0
   id: blocks_throttle2
   parameters:
@@ -152,7 +187,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [272, 608.0]
+    coordinate: [712, 480.0]
     rotation: 0
     state: enabled
 - name: channels_channel_model_0
@@ -163,7 +198,7 @@ blocks:
     block_tags: 'False'
     comment: ''
     epsilon: '1.0'
-    freq_offset: '0.0'
+    freq_offset: '0'
     maxoutbuf: '0'
     minoutbuf: '0'
     noise_voltage: noise_voltage
@@ -173,23 +208,23 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [504, 584.0]
+    coordinate: [1016, 632.0]
     rotation: 0
-    state: enabled
+    state: disabled
 - name: digital_constellation_decoder_cb_0
   id: digital_constellation_decoder_cb
   parameters:
     affinity: ''
     alias: ''
     comment: ''
-    constellation: constellation
+    constellation: digital.constellation_qpsk().base()
     maxoutbuf: '0'
     minoutbuf: '0'
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [744, 624.0]
+    coordinate: [1184, 504.0]
     rotation: 0
     state: enabled
 - name: digital_constellation_encoder_bc_0
@@ -198,14 +233,48 @@ blocks:
     affinity: ''
     alias: ''
     comment: ''
-    constellation: constellation
+    constellation: digital.constellation_qpsk().base()
     maxoutbuf: '0'
     minoutbuf: '0'
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [56, 528.0]
+    coordinate: [1320, 312.0]
+    rotation: 0
+    state: enabled
+- name: digital_diff_decoder_bb_0
+  id: digital_diff_decoder_bb
+  parameters:
+    affinity: ''
+    alias: ''
+    coding: digital.DIFF_DIFFERENTIAL
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    modulus: '4'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1440, 504.0]
+    rotation: 0
+    state: enabled
+- name: digital_diff_encoder_bb_0
+  id: digital_diff_encoder_bb
+  parameters:
+    affinity: ''
+    alias: ''
+    coding: digital.DIFF_DIFFERENTIAL
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    modulus: '4'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1120, 296.0]
     rotation: 0
     state: enabled
 - name: epy_block_0
@@ -215,20 +284,33 @@ blocks:
       \ GRC will instantiate the first class it finds\nto get ports and parameters\
       \ of your block. The arguments to __init__  will\nbe the parameters. All of\
       \ them are required to have default values!\n\"\"\"\n\nimport numpy as np\n\
-      from gnuradio import gr\nimport pmt\n\nclass blk(gr.sync_block):  # other base\
-      \ classes are basic_block, decim_block, interp_block\n    \"\"\"Packet Generator\
-      \ Block - generates PDUs with random bytes\"\"\"\n\n    def __init__(self, example_param=1.0):\
-      \  # only default arguments here\n        \"\"\"arguments to this function show\
-      \ up as parameters in GRC\"\"\"\n        gr.sync_block.__init__(\n         \
-      \   self,\n            name='packet generator',   # will show up in GRC\n  \
-      \          in_sig=None,\n            out_sig=None\n        )\n        self.message_port_register_in(pmt.intern('trigger'))\n\
+      from gnuradio import gr\nimport pmt\nimport json\nfrom time import time\n\n\
+      class blk(gr.sync_block):  # other base classes are basic_block, decim_block,\
+      \ interp_block\n    \"\"\"Packet Generator Block - generates PDUs with random\
+      \ bytes\"\"\"\n\n    def __init__(self, example_param=1.0):  # only default\
+      \ arguments here\n        \"\"\"arguments to this function show up as parameters\
+      \ in GRC\"\"\"\n        gr.sync_block.__init__(\n            self,\n       \
+      \     name='packet generator',   # will show up in GRC\n            in_sig=None,\n\
+      \            out_sig=None\n        )\n        self.message_port_register_in(pmt.intern('trigger'))\n\
       \        self.set_msg_handler(pmt.intern('trigger'), self.handle_msg)\n\n  \
-      \      self.message_port_register_out(pmt.intern('out'))\n       \n        self.packet_id\
-      \ = 0\n\n    def handle_msg(self, msg):\n        length = 256\n\n        data\
-      \ = np.random.randint(0, 256, length, dtype=np.uint8)\n\n        # packet id\
-      \ on the first byte\n        data[0] = self.packet_id % 256\n        self.packet_id\
-      \ += 1\n\n        pdu = pmt.cons(pmt.PMT_NIL, pmt.init_u8vector(len(data), data.tolist()))\n\
-      \n        self.message_port_pub(pmt.intern('out'), pdu)"
+      \      self.message_port_register_out(pmt.intern('out')) # packets\n       \
+      \ self.message_port_register_out(pmt.intern('metrics')) # telemetry\n      \
+      \ \n        self.packet_id = 0\n\n    def handle_msg(self, msg):\n        length\
+      \ = 256\n\n        data = np.random.randint(0, 256, length, dtype=np.uint8)\n\
+      \n        # packet id on the first byte\n        data[0] = self.packet_id %\
+      \ 256\n        self.packet_id += 1\n\n        pdu = pmt.cons(pmt.PMT_NIL, pmt.init_u8vector(len(data),\
+      \ data.tolist()))\n\n        # publish pakcet \n        self.message_port_pub(pmt.intern('out'),\
+      \ pdu)\n\n        #publish telemetry\n        # self.publish_metrics()\n\n\n\
+      \n    def publish_metrics(self):\n        metrics = {\n            'snr': 12.5,\n\
+      \            'ber': 0.00003,\n            'rssi': -42.0,\n            # 'packet_id':\
+      \ self.packet_id,\n            # 'noise_voltage': noise_voltage,\n         \
+      \   'timestamp': time()\n        }\n        print(\"SENT:\", metrics)\n    \
+      \    msg = json.dumps(metrics).encode('utf-8')\n\n        # send directly as\
+      \ u8vector (no PDU wrapper )\n        u8vec = pmt.init_u8vector(len(msg), list(msg))\n\
+      \        self.message_port_pub(pmt.intern('metrics'), u8vec)\n        # msg_list\
+      \ = list(msg) # convert bytes to list of integers\n        # pdu = pmt.cons(pmt.PMT_NIL,\
+      \ pmt.init_u8vector(len(msg_list), msg_list))\n        # self.message_port_pub(pmt.intern('metrics'),\
+      \ pdu)"
     affinity: ''
     alias: ''
     comment: ''
@@ -237,12 +319,93 @@ blocks:
     minoutbuf: '0'
   states:
     _io_cache: ('packet generator', 'blk', [('example_param', '1.0')], [('trigger',
-      'message', 1)], [('out', 'message', 1)], 'Packet Generator Block - generates
-      PDUs with random bytes', [])
+      'message', 1)], [('metrics', 'message', 1), ('out', 'message', 1)], 'Packet
+      Generator Block - generates PDUs with random bytes', [])
     bus_sink: false
     bus_source: false
     bus_structure: null
     coordinate: [288, 352.0]
+    rotation: 0
+    state: enabled
+- name: epy_block_1
+  id: epy_block
+  parameters:
+    _source_code: "\"\"\"\nEmbedded Python Blocks:\n\nEach time this file is saved,\
+      \ GRC will instantiate the first class it finds\nto get ports and parameters\
+      \ of your block. The arguments to __init__  will\nbe the parameters. All of\
+      \ them are required to have default values!\n\"\"\"\n\nimport json\nfrom time\
+      \ import time\n\nimport numpy as np\nfrom gnuradio import gr\nimport pmt\n#\
+      \ BER comparator\nclass blk(gr.sync_block):  # other base classes are basic_block,\
+      \ decim_block, interp_block\n    \"\"\"Embedded Python Block example - a simple\
+      \ multiply const\"\"\"\n\n    def __init__(self):  # only default arguments\
+      \ here\n        \"\"\"arguments to this function show up as parameters in GRC\"\
+      \"\"\n        gr.sync_block.__init__(\n            self,\n            name='ber_comparator',\
+      \   # will show up in GRC\n            in_sig=[np.uint8, np.uint8],  # two input\
+      \ streams of bytes\n            out_sig=None\n        )\n        # Two message\
+      \ inputs\n        # self.message_port_register_in(pmt.intern('tx'))\n      \
+      \  # self.message_port_register_in(pmt.intern('rx'))\n\n        # self.set_msg_handler(pmt.intern('tx'),\
+      \ self.handle_tx)\n        # self.set_msg_handler(pmt.intern('rx'), self.handle_rx)\n\
+      \n        # Metrics output\n        self.message_port_register_out(pmt.intern('metrics'))\n\
+      \        from collections import deque\n        self.tx_fifo = deque()\n   \
+      \     self.total_bits = 0\n        self.error_bits = 0\n\n    # # Store transmitted\
+      \ packet\n    # def handle_tx(self, msg):\n    #     tx_bytes = pmt.u8vector_elements(pmt.cdr(msg))\n\
+      \    #     self.tx_fifo.append(tx_bytes)\n\n    # def handle_rx(self, msg):\n\
+      \    #     if not self.tx_fifo:\n    #         print(\"No TX stored yet\")\n\
+      \    #         return\n\n    #     tx_bytes = self.tx_fifo.popleft()\n    #\
+      \     rx_bytes = pmt.u8vector_elements(pmt.cdr(msg))\n\n    #     print(\"TX\
+      \ first 8:\", tx_bytes[:8])\n    #     print(\"RX first 8:\", rx_bytes[:8])\n\
+      \    #     print(\"------\")\n    #     # pkt_id = rx_data[0]\n    #     # print(\"\
+      RX packet:\", pkt_id)\n    #     # if pkt_id not in self.tx_buffer:\n    # \
+      \    #     print(f\"Received packet ID {pkt_id} with no corresponding transmitted\
+      \ packet.\")\n    #     #     return\n    #     # tx_data = self.tx_buffer.get(pkt_id,\
+      \ None)\n    #     # if tx_data is None:\n    #     #     print(f\"No transmitted\
+      \ packet found for packet ID {pkt_id}\")\n    #     #     return\n    \n   \
+      \ #     # # Make sure lengths match\n    #     # min_len = min(len(rx_data),\
+      \ len(tx_data))\n\n    #     # errors = 0\n    #     # total = min_len * 8 \
+      \ # total bits\n\n    #     # for i in range(min_len):\n    #     #     diff\
+      \ = tx_data[i] ^ rx_data[i]  # XOR to find bit differences\n    #     #    \
+      \ errors += bin(diff).count('1')  # Count number of differing bits\n\n    #\
+      \     # self.total_bits += total\n    #     # self.error_bits += errors\n\n\
+      \    #     # if self.total_bits > 0:\n    #     #     ber = self.error_bits\
+      \ / self.total_bits\n    #     # else:            ber = 0.0\n\n    #     # if\
+      \ self.last_tx is None:\n    #     #     return\n\n    #     # tx_bytes = self.last_tx\n\
+      \    #     # rx_bytes = pmt.u8vector_elements(pmt.cdr(msg))\n\n    #     # min_len\
+      \ = min(len(tx_bytes), len(rx_bytes))\n\n    #     # errors = 0\n    #     #\
+      \ total_bits = min_len * 8\n\n    #     # for i in range(min_len):\n    #  \
+      \   #     diff = tx_bytes[i] ^ rx_bytes[i]\n    #     #     errors += bin(diff).count(\"\
+      1\")\n\n    #     # self.total_bits += total_bits\n    #     # self.error_bits\
+      \ += errors\n\n    #     # ber = self.error_bits / self.total_bits\n\n    #\
+      \     # print(\"BER:\", ber)\n\n    #     # self.last_tx = None\n    #     #\
+      \ # Send metrics as a dictionary\n    #     # metrics = {\n    #     #     'ber':\
+      \ ber,\n    #     #     # 'total_bits': self.total_bits,\n    #     #     #\
+      \ 'error_bits': self.error_bits,\n    #     #     'timestamp': time()\n    #\
+      \     # }\n\n    #     # msg_json = json.dumps(metrics).encode('utf-8')\n  \
+      \  #     # u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))\n    # \
+      \    # self.message_port_pub(pmt.intern('metrics'), u8vec)\n\n    def work(self,\
+      \ input_items, output_items):\n        # This block is triggered by incoming\
+      \ messages, so we don't need to do anything here\n        tx = input_items[0]\n\
+      \        rx = input_items[1]\n        print(\"TX:\", tx[:10])\n        print(\"\
+      RX:\", rx[:10])\n        n = min(len(tx), len(rx))\n        print(\"WORK called\
+      \ with\", n, \"items\")\n\n        errors = 0\n        for i in range(n):\n\
+      \            # diff = tx[i] ^ rx[i]\n            # errors += bin(diff).count(\"\
+      1\")\n            if tx[i] != rx[i]:\n                errors += 1\n\n      \
+      \  # self.total_bits += n * 2\n        self.total_bits += n \n        self.error_bits\
+      \ += errors\n\n        ber = self.error_bits / self.total_bits if self.total_bits\
+      \ > 0 else 0.0\n        print(f\"Current BER: {ber:.6f} ({self.error_bits} errors\
+      \ out of {self.total_bits} bits)\")\n        \n        return n\n"
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    _io_cache: ('ber_comparator', 'blk', [], [('0', 'byte', 1), ('1', 'byte', 1)],
+      [('metrics', 'message', 1)], 'Embedded Python Block example - a simple multiply
+      const', [])
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1344, 112.0]
     rotation: 0
     state: enabled
 - name: pdu_pdu_to_tagged_stream_0
@@ -259,7 +422,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [504, 352.0]
+    coordinate: [528, 344.0]
     rotation: 0
     state: enabled
 - name: pdu_tagged_stream_to_pdu_0
@@ -276,19 +439,60 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [664, 800.0]
+    coordinate: [1104, 672.0]
+    rotation: 0
+    state: disabled
+- name: zeromq_pub_msg_sink_0
+  id: zeromq_pub_msg_sink
+  parameters:
+    address: tcp://127.0.0.1:5555
+    affinity: ''
+    alias: ''
+    bind: 'True'
+    comment: ''
+    timeout: '100'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [512, 432.0]
+    rotation: 0
+    state: enabled
+- name: zeromq_pub_msg_sink_0_0
+  id: zeromq_pub_msg_sink
+  parameters:
+    address: tcp://127.0.0.1:5556
+    affinity: ''
+    alias: ''
+    bind: 'True'
+    comment: ''
+    timeout: '100'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1064, 48.0]
     rotation: 0
     state: enabled
 
 connections:
+- [analog_noise_source_x_0, '0', blocks_multiply_const_vxx_0, '0']
+- [blocks_add_xx_0, '0', digital_constellation_decoder_cb_0, '0']
 - [blocks_message_strobe_0, strobe, epy_block_0, trigger]
-- [blocks_repack_bits_bb_0, '0', digital_constellation_encoder_bc_0, '0']
+- [blocks_multiply_const_vxx_0, '0', blocks_add_xx_0, '1']
+- [blocks_repack_bits_bb_0, '0', digital_diff_encoder_bb_0, '0']
+- [blocks_repack_bits_bb_0, '0', epy_block_1, '0']
 - [blocks_repack_bits_bb_1, '0', pdu_tagged_stream_to_pdu_0, '0']
+- [blocks_throttle2_0, '0', blocks_add_xx_0, '0']
 - [blocks_throttle2_0, '0', channels_channel_model_0, '0']
 - [channels_channel_model_0, '0', digital_constellation_decoder_cb_0, '0']
-- [digital_constellation_decoder_cb_0, '0', blocks_repack_bits_bb_1, '0']
+- [digital_constellation_decoder_cb_0, '0', digital_diff_decoder_bb_0, '0']
 - [digital_constellation_encoder_bc_0, '0', blocks_throttle2_0, '0']
+- [digital_diff_decoder_bb_0, '0', epy_block_1, '1']
+- [digital_diff_encoder_bb_0, '0', digital_constellation_encoder_bc_0, '0']
 - [epy_block_0, out, pdu_pdu_to_tagged_stream_0, pdus]
+- [epy_block_0, out, zeromq_pub_msg_sink_0, in]
+- [epy_block_1, metrics, zeromq_pub_msg_sink_0_0, in]
 - [pdu_pdu_to_tagged_stream_0, '0', blocks_repack_bits_bb_0, '0']
 
 metadata:
