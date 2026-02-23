@@ -1,3 +1,5 @@
+import time
+
 from transport.zmq_sub import ZMQSubscriber
 from phy_metrics.metrics_engine import PhyMetricsEngine
 
@@ -9,11 +11,16 @@ def main():
 
     while True:
         data = subscriber.receive()
+        if data is None:
+            # No telemetry this cycle (timeout)
+            continue
         alarms = engine.update(data)
-
-        print(engine.get_all().to_dict())
+        print ("Received data:", data)
+        print("ENGINE:", engine.get_all().to_dict())
     
         if alarms:
             print("ALARMS:", alarms)
+
+        time.sleep(0.05)  # Sleep to prevent busy waiting
 
 if __name__ == "__main__":    main()

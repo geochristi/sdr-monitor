@@ -37,7 +37,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '0.9'
+    value: '0.6'
   states:
     bus_sink: false
     bus_source: false
@@ -375,15 +375,9 @@ blocks:
       \   #     diff = tx_bytes[i] ^ rx_bytes[i]\n    #     #     errors += bin(diff).count(\"\
       1\")\n\n    #     # self.total_bits += total_bits\n    #     # self.error_bits\
       \ += errors\n\n    #     # ber = self.error_bits / self.total_bits\n\n    #\
-      \     # print(\"BER:\", ber)\n\n    #     # self.last_tx = None\n    #     #\
-      \ # Send metrics as a dictionary\n    #     # metrics = {\n    #     #     'ber':\
-      \ ber,\n    #     #     # 'total_bits': self.total_bits,\n    #     #     #\
-      \ 'error_bits': self.error_bits,\n    #     #     'timestamp': time()\n    #\
-      \     # }\n\n    #     # msg_json = json.dumps(metrics).encode('utf-8')\n  \
-      \  #     # u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))\n    # \
-      \    # self.message_port_pub(pmt.intern('metrics'), u8vec)\n\n    def work(self,\
-      \ input_items, output_items):\n        # This block is triggered by incoming\
-      \ messages, so we don't need to do anything here\n        tx = input_items[0]\n\
+      \     # print(\"BER:\", ber)\n\n    #     # self.last_tx = None\n\n\n    def\
+      \ work(self, input_items, output_items):\n        # This block is triggered\
+      \ by incoming messages, so we don't need to do anything here\n        tx = input_items[0]\n\
       \        rx = input_items[1]\n        print(\"TX:\", tx[:10])\n        print(\"\
       RX:\", rx[:10])\n        n = min(len(tx), len(rx))\n        print(\"WORK called\
       \ with\", n, \"items\")\n\n        errors = 0\n        for i in range(n):\n\
@@ -392,7 +386,12 @@ blocks:
       \  # self.total_bits += n * 2\n        self.total_bits += n \n        self.error_bits\
       \ += errors\n\n        ber = self.error_bits / self.total_bits if self.total_bits\
       \ > 0 else 0.0\n        print(f\"Current BER: {ber:.6f} ({self.error_bits} errors\
-      \ out of {self.total_bits} bits)\")\n        \n        return n\n"
+      \ out of {self.total_bits} bits)\")\n        \n                # Send metrics\
+      \ as a dictionary\n        metrics = {\n            'ber': ber,\n          \
+      \  # 'total_bits': self.total_bits,\n            # 'error_bits': self.error_bits,\n\
+      \            'timestamp': time()\n        }\n\n        msg_json = json.dumps(metrics).encode('utf-8')\n\
+      \        u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))\n        self.message_port_pub(pmt.intern('metrics'),\
+      \ u8vec)\n        return n\n"
     affinity: ''
     alias: ''
     comment: ''

@@ -9,9 +9,9 @@ import random
 
 context = zmq.Context()
 socket = context.socket(zmq.PUB)
-socket.bind("tcp://127.0.0.1:5555")
+socket.bind("tcp://127.0.0.1:5556")
 
-print("Mock publisher started on tcp://127.0.0.1:5555")
+print("Mock publisher started on tcp://127.0.0.1:5556")
 
 while True:
     data = {
