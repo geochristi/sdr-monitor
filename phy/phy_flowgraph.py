@@ -10,12 +10,12 @@
 
 from PyQt5 import Qt
 from gnuradio import qtgui
+from gnuradio import analog
 from gnuradio import blocks
 import pmt
-from gnuradio import channels
-from gnuradio.filter import firdes
 from gnuradio import digital
 from gnuradio import gr
+from gnuradio.filter import firdes
 from gnuradio.fft import window
 import sys
 import signal
@@ -24,7 +24,10 @@ from argparse import ArgumentParser
 from gnuradio.eng_arg import eng_float, intx
 from gnuradio import eng_notation
 from gnuradio import gr, pdu
+from gnuradio import zeromq
+import math
 import phy_flowgraph_epy_block_0 as epy_block_0  # embedded python block
+import phy_flowgraph_epy_block_1 as epy_block_1  # embedded python block
 
 
 
@@ -63,31 +66,35 @@ class phy_flowgraph(gr.top_block, Qt.QWidget):
         ##################################################
         # Variables
         ##################################################
+        self.Modulation = Modulation = 16
         self.samp_rate = samp_rate = 100000
-        self.noise_voltage = noise_voltage = 0.0001
-        self.constellation = constellation = digital.constellation_qpsk().base()
-        self.constellation.set_npwr(1.0)
+        self.noise_voltage = noise_voltage = 0.3
+        self.mod_type = mod_type = "QAM"
+        self.bits_per_symbol = bits_per_symbol = int(math.log2(Modulation))
 
         ##################################################
         # Blocks
         ##################################################
 
-        self.pdu_tagged_stream_to_pdu_0 = pdu.tagged_stream_to_pdu(gr.types.byte_t, 'packet_len')
+        self.zeromq_pub_msg_sink_0_0 = zeromq.pub_msg_sink('tcp://127.0.0.1:5556', 100, True)
+        self.zeromq_pub_msg_sink_0 = zeromq.pub_msg_sink('tcp://127.0.0.1:5555', 100, True)
         self.pdu_pdu_to_tagged_stream_0 = pdu.pdu_to_tagged_stream(gr.types.byte_t, 'packet_len')
+        self.epy_block_1 = epy_block_1.blk()
         self.epy_block_0 = epy_block_0.blk(example_param=1.0)
-        self.digital_constellation_encoder_bc_0 = digital.constellation_encoder_bc(constellation)
-        self.digital_constellation_decoder_cb_0 = digital.constellation_decoder_cb(constellation)
-        self.channels_channel_model_0 = channels.channel_model(
-            noise_voltage=noise_voltage,
-            frequency_offset=0.0,
-            epsilon=1.0,
-            taps=[1.0],
-            noise_seed=0,
-            block_tags=False)
+        self.digital_diff_encoder_bb_0 = digital.diff_encoder_bb(Modulation if mod_type == "PSK" else 1, digital.DIFF_DIFFERENTIAL)
+        self.digital_diff_decoder_bb_0 = digital.diff_decoder_bb(Modulation if mod_type == "PSK" else 1, digital.DIFF_DIFFERENTIAL)
+        self.digital_constellation_encoder_bc_0 = digital.constellation_encoder_bc(( digital.constellation_bpsk().base() if (mod_type == "PSK" and Modulation == 2) else digital.constellation_qpsk().base() if (mod_type == "PSK" and Modulation == 4) else digital.constellation_8psk().base() if (mod_type == "PSK" and Modulation == 8) else digital.qam_constellation(Modulation, False).base() ))
+        self.digital_constellation_decoder_cb_0 = digital.constellation_decoder_cb(( digital.constellation_bpsk().base() if (mod_type == "PSK" and Modulation == 2) else digital.constellation_qpsk().base() if (mod_type == "PSK" and Modulation == 4) else digital.constellation_8psk().base() if (mod_type == "PSK" and Modulation == 8) else digital.qam_constellation(Modulation, False).base() ))
         self.blocks_throttle2_0 = blocks.throttle( gr.sizeof_gr_complex*1, samp_rate, True, 0 if "auto" == "auto" else max( int(float(0.1) * samp_rate) if "auto" == "time" else int(0.1), 1) )
-        self.blocks_repack_bits_bb_1 = blocks.repack_bits_bb(2, 8, 'packet_len', True, gr.GR_LSB_FIRST)
-        self.blocks_repack_bits_bb_0 = blocks.repack_bits_bb(8, 2, 'packet_len', True, gr.GR_LSB_FIRST)
-        self.blocks_message_strobe_0 = blocks.message_strobe(pmt.intern("TEST"), 10000)
+        self.blocks_selector_1_0 = blocks.selector(gr.sizeof_char*1,0 if mod_type == "PSK" else 1,0)
+        self.blocks_selector_1_0.set_enabled(True)
+        self.blocks_selector_1 = blocks.selector(gr.sizeof_char*1,0 if mod_type == "PSK" else 1,0)
+        self.blocks_selector_1.set_enabled(True)
+        self.blocks_repack_bits_bb_0 = blocks.repack_bits_bb(8, bits_per_symbol, 'packet_len', True, gr.GR_LSB_FIRST)
+        self.blocks_multiply_const_vxx_0 = blocks.multiply_const_cc(noise_voltage)
+        self.blocks_message_strobe_0 = blocks.message_strobe(pmt.intern("TEST"), 1000)
+        self.blocks_add_xx_0 = blocks.add_vcc(1)
+        self.analog_noise_source_x_0 = analog.noise_source_c(analog.GR_GAUSSIAN, 1, 0)
 
 
         ##################################################
@@ -95,12 +102,22 @@ class phy_flowgraph(gr.top_block, Qt.QWidget):
         ##################################################
         self.msg_connect((self.blocks_message_strobe_0, 'strobe'), (self.epy_block_0, 'trigger'))
         self.msg_connect((self.epy_block_0, 'out'), (self.pdu_pdu_to_tagged_stream_0, 'pdus'))
-        self.connect((self.blocks_repack_bits_bb_0, 0), (self.digital_constellation_encoder_bc_0, 0))
-        self.connect((self.blocks_repack_bits_bb_1, 0), (self.pdu_tagged_stream_to_pdu_0, 0))
-        self.connect((self.blocks_throttle2_0, 0), (self.channels_channel_model_0, 0))
-        self.connect((self.channels_channel_model_0, 0), (self.digital_constellation_decoder_cb_0, 0))
-        self.connect((self.digital_constellation_decoder_cb_0, 0), (self.blocks_repack_bits_bb_1, 0))
+        self.msg_connect((self.epy_block_0, 'out'), (self.zeromq_pub_msg_sink_0, 'in'))
+        self.msg_connect((self.epy_block_1, 'metrics'), (self.zeromq_pub_msg_sink_0_0, 'in'))
+        self.connect((self.analog_noise_source_x_0, 0), (self.blocks_multiply_const_vxx_0, 0))
+        self.connect((self.blocks_add_xx_0, 0), (self.digital_constellation_decoder_cb_0, 0))
+        self.connect((self.blocks_multiply_const_vxx_0, 0), (self.blocks_add_xx_0, 1))
+        self.connect((self.blocks_repack_bits_bb_0, 0), (self.blocks_selector_1, 1))
+        self.connect((self.blocks_repack_bits_bb_0, 0), (self.digital_diff_encoder_bb_0, 0))
+        self.connect((self.blocks_repack_bits_bb_0, 0), (self.epy_block_1, 0))
+        self.connect((self.blocks_selector_1, 0), (self.digital_constellation_encoder_bc_0, 0))
+        self.connect((self.blocks_selector_1_0, 0), (self.epy_block_1, 1))
+        self.connect((self.blocks_throttle2_0, 0), (self.blocks_add_xx_0, 0))
+        self.connect((self.digital_constellation_decoder_cb_0, 0), (self.blocks_selector_1_0, 1))
+        self.connect((self.digital_constellation_decoder_cb_0, 0), (self.digital_diff_decoder_bb_0, 0))
         self.connect((self.digital_constellation_encoder_bc_0, 0), (self.blocks_throttle2_0, 0))
+        self.connect((self.digital_diff_decoder_bb_0, 0), (self.blocks_selector_1_0, 0))
+        self.connect((self.digital_diff_encoder_bb_0, 0), (self.blocks_selector_1, 0))
         self.connect((self.pdu_pdu_to_tagged_stream_0, 0), (self.blocks_repack_bits_bb_0, 0))
 
 
@@ -111,6 +128,15 @@ class phy_flowgraph(gr.top_block, Qt.QWidget):
         self.wait()
 
         event.accept()
+
+    def get_Modulation(self):
+        return self.Modulation
+
+    def set_Modulation(self, Modulation):
+        self.Modulation = Modulation
+        self.set_bits_per_symbol(int(math.log2(self.Modulation)))
+        self.digital_constellation_decoder_cb_0.set_constellation(( digital.constellation_bpsk().base() if (self.mod_type == "PSK" and self.Modulation == 2) else digital.constellation_qpsk().base() if (self.mod_type == "PSK" and self.Modulation == 4) else digital.constellation_8psk().base() if (self.mod_type == "PSK" and self.Modulation == 8) else digital.qam_constellation(self.Modulation, False).base() ))
+        self.digital_constellation_encoder_bc_0.set_constellation(( digital.constellation_bpsk().base() if (self.mod_type == "PSK" and self.Modulation == 2) else digital.constellation_qpsk().base() if (self.mod_type == "PSK" and self.Modulation == 4) else digital.constellation_8psk().base() if (self.mod_type == "PSK" and self.Modulation == 8) else digital.qam_constellation(self.Modulation, False).base() ))
 
     def get_samp_rate(self):
         return self.samp_rate
@@ -124,15 +150,24 @@ class phy_flowgraph(gr.top_block, Qt.QWidget):
 
     def set_noise_voltage(self, noise_voltage):
         self.noise_voltage = noise_voltage
-        self.channels_channel_model_0.set_noise_voltage(self.noise_voltage)
+        self.blocks_multiply_const_vxx_0.set_k(self.noise_voltage)
 
-    def get_constellation(self):
-        return self.constellation
+    def get_mod_type(self):
+        return self.mod_type
 
-    def set_constellation(self, constellation):
-        self.constellation = constellation
-        self.digital_constellation_decoder_cb_0.set_constellation(self.constellation)
-        self.digital_constellation_encoder_bc_0.set_constellation(self.constellation)
+    def set_mod_type(self, mod_type):
+        self.mod_type = mod_type
+        self.blocks_selector_1.set_input_index(0 if self.mod_type == "PSK" else 1)
+        self.blocks_selector_1_0.set_input_index(0 if self.mod_type == "PSK" else 1)
+        self.digital_constellation_decoder_cb_0.set_constellation(( digital.constellation_bpsk().base() if (self.mod_type == "PSK" and self.Modulation == 2) else digital.constellation_qpsk().base() if (self.mod_type == "PSK" and self.Modulation == 4) else digital.constellation_8psk().base() if (self.mod_type == "PSK" and self.Modulation == 8) else digital.qam_constellation(self.Modulation, False).base() ))
+        self.digital_constellation_encoder_bc_0.set_constellation(( digital.constellation_bpsk().base() if (self.mod_type == "PSK" and self.Modulation == 2) else digital.constellation_qpsk().base() if (self.mod_type == "PSK" and self.Modulation == 4) else digital.constellation_8psk().base() if (self.mod_type == "PSK" and self.Modulation == 8) else digital.qam_constellation(self.Modulation, False).base() ))
+
+    def get_bits_per_symbol(self):
+        return self.bits_per_symbol
+
+    def set_bits_per_symbol(self, bits_per_symbol):
+        self.bits_per_symbol = bits_per_symbol
+        self.blocks_repack_bits_bb_0.set_k_and_l(8,self.bits_per_symbol)
 
 
 
