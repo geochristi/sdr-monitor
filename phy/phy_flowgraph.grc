@@ -2,14 +2,14 @@ options:
   parameters:
     author: ''
     catch_exceptions: 'True'
-    category: '[GRC Hier Blocks]'
+    category: ''
     cmake_opt: ''
     comment: ''
     copyright: ''
     description: ''
     gen_cmake: 'On'
     gen_linking: dynamic
-    generate_options: qt_gui
+    generate_options: no_gui
     hier_block_src_path: '.:'
     id: phy_flowgraph
     max_nouts: '0'
@@ -73,7 +73,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '0.3'
+    value: '0.5'
   states:
     bus_sink: false
     bus_source: false
@@ -396,51 +396,32 @@ blocks:
       \ self.handle_tx)\n        # self.set_msg_handler(pmt.intern('rx'), self.handle_rx)\n\
       \n        # Metrics output\n        self.message_port_register_out(pmt.intern('metrics'))\n\
       \        from collections import deque\n        self.tx_fifo = deque()\n   \
-      \     self.total_bits = 0\n        self.error_bits = 0\n\n    # # Store transmitted\
-      \ packet\n    # def handle_tx(self, msg):\n    #     tx_bytes = pmt.u8vector_elements(pmt.cdr(msg))\n\
-      \    #     self.tx_fifo.append(tx_bytes)\n\n    # def handle_rx(self, msg):\n\
-      \    #     if not self.tx_fifo:\n    #         print(\"No TX stored yet\")\n\
-      \    #         return\n\n    #     tx_bytes = self.tx_fifo.popleft()\n    #\
-      \     rx_bytes = pmt.u8vector_elements(pmt.cdr(msg))\n\n    #     print(\"TX\
-      \ first 8:\", tx_bytes[:8])\n    #     print(\"RX first 8:\", rx_bytes[:8])\n\
-      \    #     print(\"------\")\n    #     # pkt_id = rx_data[0]\n    #     # print(\"\
-      RX packet:\", pkt_id)\n    #     # if pkt_id not in self.tx_buffer:\n    # \
-      \    #     print(f\"Received packet ID {pkt_id} with no corresponding transmitted\
-      \ packet.\")\n    #     #     return\n    #     # tx_data = self.tx_buffer.get(pkt_id,\
-      \ None)\n    #     # if tx_data is None:\n    #     #     print(f\"No transmitted\
-      \ packet found for packet ID {pkt_id}\")\n    #     #     return\n    \n   \
-      \ #     # # Make sure lengths match\n    #     # min_len = min(len(rx_data),\
-      \ len(tx_data))\n\n    #     # errors = 0\n    #     # total = min_len * 8 \
-      \ # total bits\n\n    #     # for i in range(min_len):\n    #     #     diff\
-      \ = tx_data[i] ^ rx_data[i]  # XOR to find bit differences\n    #     #    \
-      \ errors += bin(diff).count('1')  # Count number of differing bits\n\n    #\
-      \     # self.total_bits += total\n    #     # self.error_bits += errors\n\n\
-      \    #     # if self.total_bits > 0:\n    #     #     ber = self.error_bits\
-      \ / self.total_bits\n    #     # else:            ber = 0.0\n\n    #     # if\
-      \ self.last_tx is None:\n    #     #     return\n\n    #     # tx_bytes = self.last_tx\n\
-      \    #     # rx_bytes = pmt.u8vector_elements(pmt.cdr(msg))\n\n    #     # min_len\
-      \ = min(len(tx_bytes), len(rx_bytes))\n\n    #     # errors = 0\n    #     #\
-      \ total_bits = min_len * 8\n\n    #     # for i in range(min_len):\n    #  \
-      \   #     diff = tx_bytes[i] ^ rx_bytes[i]\n    #     #     errors += bin(diff).count(\"\
-      1\")\n\n    #     # self.total_bits += total_bits\n    #     # self.error_bits\
-      \ += errors\n\n    #     # ber = self.error_bits / self.total_bits\n\n    #\
-      \     # print(\"BER:\", ber)\n\n    #     # self.last_tx = None\n\n\n    def\
-      \ work(self, input_items, output_items):\n        # This block is triggered\
+      \     self.total_bits = 0\n        self.error_bits = 0\n        self.window_symbols\
+      \ = 0\n        self.window_errors = 0\n        self.WINDOW_SIZE = 10000\n\n\n\
+      \    def work(self, input_items, output_items):\n        # This block is triggered\
       \ by incoming messages, so we don't need to do anything here\n        tx = input_items[0]\n\
       \        rx = input_items[1]\n        print(\"TX:\", tx[:10])\n        print(\"\
       RX:\", rx[:10])\n        n = min(len(tx), len(rx))\n        print(\"WORK called\
       \ with\", n, \"items\")\n\n        errors = 0\n        for i in range(n):\n\
       \            # diff = tx[i] ^ rx[i]\n            # errors += bin(diff).count(\"\
       1\")\n            if tx[i] != rx[i]:\n                errors += 1\n\n      \
-      \  # self.total_bits += n * 2\n        self.total_bits += n \n        self.error_bits\
-      \ += errors\n\n        ber = self.error_bits / self.total_bits if self.total_bits\
-      \ > 0 else 0.0\n        print(f\"Current BER: {ber:.6f} ({self.error_bits} errors\
-      \ out of {self.total_bits} bits)\")\n        \n                # Send metrics\
-      \ as a dictionary\n        metrics = {\n            'ber': ber,\n          \
-      \  # 'total_bits': self.total_bits,\n            # 'error_bits': self.error_bits,\n\
-      \            'timestamp': time()\n        }\n\n        msg_json = json.dumps(metrics).encode('utf-8')\n\
-      \        u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))\n        self.message_port_pub(pmt.intern('metrics'),\
-      \ u8vec)\n        return n\n"
+      \  # self.total_bits += n * 2\n        # self.total_bits += n \n        # self.error_bits\
+      \ += errors\n\n        # ber = self.error_bits / self.total_bits if self.total_bits\
+      \ > 0 else 0.0\n        # ber = errors / n if n > 0 else 0.0\n        # print(f\"\
+      Current BER: {ber:.6f} ({errors} errors out of {n} bits)\")\n        WINDOW_SIZE\
+      \ = 10000\n\n        self.window_symbols += n\n        self.window_errors +=\
+      \ errors\n\n        if self.window_symbols >= WINDOW_SIZE:\n            ber\
+      \ = self.window_errors / self.window_symbols\n            \n            print(\"\
+      WINDOW BER:\", ber)\n            \n            \n                \n        \
+      \    # Send metrics as a dictionary\n            metrics = {\n             \
+      \   'ber': ber,\n                # 'total_bits': self.total_bits,\n        \
+      \        # 'error_bits': self.error_bits,\n                'timestamp': time()\n\
+      \            }\n\n            msg_json = json.dumps(metrics).encode('utf-8')\n\
+      \            u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))\n    \
+      \        self.message_port_pub(pmt.intern('metrics'), u8vec)\n\n           \
+      \ #RESET WINDOW\n            self.window_symbols = 0\n            self.window_errors\
+      \ = 0\n            \n        return n\n    # def reset(self):\n    #     self.total_bits\
+      \ = 0\n    #     self.error_bits = 0\n"
     affinity: ''
     alias: ''
     comment: ''

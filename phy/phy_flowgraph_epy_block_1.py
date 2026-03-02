@@ -37,6 +37,10 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
         self.tx_fifo = deque()
         self.total_bits = 0
         self.error_bits = 0
+        self.window_symbols = 0
+        self.window_errors = 0
+        self.WINDOW_SIZE = 10000
+
 
     def work(self, input_items, output_items):
         # This block is triggered by incoming messages, so we don't need to do anything here
@@ -55,21 +59,41 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
                 errors += 1
 
         # self.total_bits += n * 2
-        self.total_bits += n 
-        self.error_bits += errors
+        # self.total_bits += n 
+        # self.error_bits += errors
 
-        ber = self.error_bits / self.total_bits if self.total_bits > 0 else 0.0
-        print(f"Current BER: {ber:.6f} ({self.error_bits} errors out of {self.total_bits} bits)")
-        
-                # Send metrics as a dictionary
-        metrics = {
-            'ber': ber,
-            # 'total_bits': self.total_bits,
-            # 'error_bits': self.error_bits,
-            'timestamp': time()
-        }
+        # ber = self.error_bits / self.total_bits if self.total_bits > 0 else 0.0
+        # ber = errors / n if n > 0 else 0.0
+        # print(f"Current BER: {ber:.6f} ({errors} errors out of {n} bits)")
+        WINDOW_SIZE = 10000
 
-        msg_json = json.dumps(metrics).encode('utf-8')
-        u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))
-        self.message_port_pub(pmt.intern('metrics'), u8vec)
+        self.window_symbols += n
+        self.window_errors += errors
+
+        if self.window_symbols >= WINDOW_SIZE:
+            ber = self.window_errors / self.window_symbols
+            
+            print("WINDOW BER:", ber)
+            
+            
+                
+            # Send metrics as a dictionary
+            metrics = {
+                'ber': ber,
+                # 'total_bits': self.total_bits,
+                # 'error_bits': self.error_bits,
+                'timestamp': time()
+            }
+
+            msg_json = json.dumps(metrics).encode('utf-8')
+            u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))
+            self.message_port_pub(pmt.intern('metrics'), u8vec)
+
+            #RESET WINDOW
+            self.window_symbols = 0
+            self.window_errors = 0
+            
         return n
+    # def reset(self):
+    #     self.total_bits = 0
+    #     self.error_bits = 0
