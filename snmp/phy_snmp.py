@@ -2,22 +2,26 @@
 import os
 import sys
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 try:
     from .oids import *
 except ImportError:
     from oids import *
 
-STATS_FILE = "/tmp/phy_stats.txt"
+from transport.zmq_sub import ZMQSubscriber
+from phy_metrics.metrics_engine import PhyMetricsEngine
+
+subscriber = ZMQSubscriber()
+engine = PhyMetricsEngine()
+
 CONTROL_FILE = "/home/georgia/Desktop/SDR/control/phy_control.txt"
-
-
-def read_stats():
-    try:
-        with open(STATS_FILE) as f:
-            bits, errors = f.readline().strip().split(",")
-            return int(bits), int(errors)
-    except:
-        return 0, 0
+# NOTE: Avoid printing to stdout. pass_persist uses stdout for the SNMP protocol.
+# Debug messages must go to stderr or a log file.
+def update_metrics():
+    #while True:
+    data = subscriber.receive(timeout=0)
+    if data is not None:
+        engine.update(data)
 
 def read_noise():
     try:
@@ -39,28 +43,35 @@ def compute_ber(bits, errors):
     return str(round(ber,6))
 
 def handle_get(oid):
-    bits, errors = read_stats()
+    #print("DEBUG:", repr(oid), file=sys.stderr)
+    update_metrics()
     if oid.startswith(OID_NOISE):
         return "integer", int(read_noise() * 10)  # Scale noise by 10 for better SNMP representation
 
     elif oid == OID_BITS:
-        return "integer", bits
+        bits = engine.get_metrics("bits")
+        return "integer", bits if bits is not None else 0
 
     elif oid == OID_ERRORS:
-        return "integer", errors
+        errors = engine.get_metrics("errors")
+        return "integer", errors if errors is not None else 0
     # TODO IF-MIB is currently used by the system and we need to bypass it
     # elif oid == ".1.3.6.1.2.1.2.2.1.10.1":   # ifInOctets
     #     # ifinOctets is bits/8 since it's counting bytes, not bits
-    #     bits, errors = read_stats()
+    #     bits, errors = engine.get_metrics()
     #     octets = bits // 8
     #     return "integer", octets
 
     # elif oid == ".1.3.6.1.2.1.2.2.1.14.1": # ifInErrors
-    #     bits, errors = read_stats()
+    #     bits, errors = engine.get_metrics()
     #     return "integer", errors
 
     elif oid == OID_BER:
-        return "string", compute_ber(bits, errors)
+        # bits = engine.get_metrics("bits")
+        # errors = engine.get_metrics("errors")
+        # return "string", compute_ber(bits, errors)
+        ber = engine.get_metrics("ber")
+        return "string", str(round(ber, 6)) if ber is not None else "0"
 
     return None
 def oid_to_tuple(oid):
@@ -92,11 +103,13 @@ def handle_set(oid, value):
 def main():
     while True:
 
-        cmd = sys.stdin.readline().strip()
+        cmd = sys.stdin.readline()
 
         if not cmd:
-            continue
+            break
         
+        cmd = cmd.strip()   
+
         if cmd == "PING":
             print("PONG")
             sys.stdout.flush()
@@ -108,7 +121,7 @@ def main():
             result = handle_get(oid)
             if result:
                 typ, val = result
-                print(oid)
+                print(oid+ ".0")  # Append .0 for scalar OIDs
                 print(typ)
                 print(val)
             else:
@@ -119,7 +132,7 @@ def main():
             result = handle_getnext(oid)
             if result:
                 o, typ, val = result
-                print(o)
+                print(o + ".0")  # Append .0 for scalar OIDs
                 print(typ)
                 print(val)
             else:

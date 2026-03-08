@@ -405,20 +405,20 @@ blocks:
       \n        # Update running totals.\n        self.total_bits += n\n        self.total_bit_errors\
       \ += bit_errors\n\n        print(f\"[BER] chunk errors: {bit_errors}/{n}\")\n\
       \        print(f\"[BER] totals: bits={self.total_bits}, errors={self.total_bit_errors}\"\
-      )\n        with open(\"/tmp/phy_stats.txt\", \"w\") as f:\n            f.write(f\"\
+      )\n        # with open(\"/tmp/phy_stats.txt\", \"w\") as f:\n        #     f.write(f\"\
       {self.total_bits},{self.total_bit_errors}\\n\")\n            \n        self.window_symbols\
       \ += n\n        self.window_errors += bit_errors\n\n        # Publish BER once\
       \ enough symbols have been collected.\n        if self.window_symbols >= self.WINDOW_SIZE:\n\
       \            ber = self.window_errors / self.window_symbols\n            \n\
       \            print(\"[BER] window ber:\", ber)\n                \n         \
       \   # Send metrics as a dictionary\n            metrics = {\n              \
-      \  'ber': ber,\n                # 'total_bits': self.total_bits,\n         \
-      \       # 'error_bits': self.error_bits,\n                'timestamp': time()\n\
-      \            }\n\n            msg_json = json.dumps(metrics).encode('utf-8')\n\
-      \            u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))\n    \
-      \        self.message_port_pub(pmt.intern('metrics'), u8vec)\n\n           \
-      \ # Reset window counters after publishing.\n            self.window_symbols\
-      \ = 0\n            self.window_errors = 0\n            \n        return n\n\n"
+      \  'ber': ber,\n                'bits': self.total_bits,\n                'errors':\
+      \ self.total_bit_errors,\n                'timestamp': time()\n            }\n\
+      \n            msg_json = json.dumps(metrics).encode('utf-8')\n            u8vec\
+      \ = pmt.init_u8vector(len(msg_json), list(msg_json))\n            self.message_port_pub(pmt.intern('metrics'),\
+      \ u8vec)\n\n            # Reset window counters after publishing.\n        \
+      \    self.window_symbols = 0\n            self.window_errors = 0\n         \
+      \   \n        return n\n\n"
     affinity: ''
     alias: ''
     comment: ''

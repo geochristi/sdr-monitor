@@ -61,8 +61,8 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
 
         print(f"[BER] chunk errors: {bit_errors}/{n}")
         print(f"[BER] totals: bits={self.total_bits}, errors={self.total_bit_errors}")
-        with open("/tmp/phy_stats.txt", "w") as f:
-            f.write(f"{self.total_bits},{self.total_bit_errors}\n")
+        # with open("/tmp/phy_stats.txt", "w") as f:
+        #     f.write(f"{self.total_bits},{self.total_bit_errors}\n")
             
         self.window_symbols += n
         self.window_errors += bit_errors
@@ -76,8 +76,8 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
             # Send metrics as a dictionary
             metrics = {
                 'ber': ber,
-                # 'total_bits': self.total_bits,
-                # 'error_bits': self.error_bits,
+                'bits': self.total_bits,
+                'errors': self.total_bit_errors,
                 'timestamp': time()
             }
 

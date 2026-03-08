@@ -1,18 +1,22 @@
 import zmq
 import json
-
+import sys
 
 class ZMQSubscriber:
     def __init__(self, address="tcp://127.0.0.1:5556"):#metrics port, don't subscribe to the 5555 because we don't actually want to get the packets.. only telemetry
-        self.context = zmq.Context()
+        
+        self.context = zmq.Context.instance()
         self.socket = self.context.socket(zmq.SUB)
         self.socket.connect(address)
         self.socket.setsockopt(zmq.SUBSCRIBE, b'')  # Subscribe to all messages"")
         self.socket.RCVTIMEO = 1000  # 1 second timeout
-        print(f"Subscriber connected to {address}")
-        
+        # print("Subscriber connected to", address, file=sys.stderr)        
 
-    def receive(self):
+    def receive(self, timeout=None):
+        original_timeout = self.socket.RCVTIMEO
+        if timeout is not None:
+            self.socket.RCVTIMEO = int(timeout)
+
         try:
             raw_message = self.socket.recv()
             # print("RAW:", raw_message)
@@ -25,14 +29,18 @@ class ZMQSubscriber:
             json_bytes = raw_message[json_start:]
             
             # here it shows everything 
-            print("RAW Decoded", self.deserialize(json_bytes))
-            return self.deserialize(json_bytes)
+            decoded = self.deserialize(json_bytes)
+            #print("RAW Decoded", decoded)
+            return decoded
         except zmq.Again:
-            print("No message received within timeout period.")
+            #print("No message received within timeout period.")
             return None
         except Exception as e:
-            print(f"Failed to receive message: {e}")
+            #print(f"Failed to receive message: {e}")
             return None
+        finally:
+            if timeout is not None:
+                self.socket.RCVTIMEO = original_timeout
         
     def deserialize(self, raw_message: str) -> dict:
         try:

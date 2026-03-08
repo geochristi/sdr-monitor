@@ -28,6 +28,13 @@ class PhyMetricsEngine:
             self.metrics.bandwidth = data['bandwidth']
         if 'sample_rate' in data:
             self.metrics.sample_rate = data['sample_rate']
+        if 'bits' in data:
+            self.metrics.bits = data['bits']
+        if 'errors' in data:
+            self.metrics.errors = data['errors']
+
+        if self.metrics.bits > 0:
+            self.metrics.ber = self.metrics.errors / self.metrics.bits
 
         self.metrics.update_timestamp()
         return self.alarm_detector.check(self.metrics)
