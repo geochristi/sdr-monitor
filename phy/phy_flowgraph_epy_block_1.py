@@ -14,7 +14,7 @@ from gnuradio import gr
 import pmt
 # BER comparator
 class blk(gr.sync_block):  # other base classes are basic_block, decim_block, interp_block
-    """Embedded Python Block example - a simple multiply const"""
+    """Compare TX/RX byte streams and publish BER metrics."""
 
     def __init__(self):  # only default arguments here
         """arguments to this function show up as parameters in GRC"""
@@ -24,58 +24,54 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
             in_sig=[np.uint8, np.uint8],  # two input streams of bytes
             out_sig=None
         )
-        # Two message inputs
-        # self.message_port_register_in(pmt.intern('tx'))
-        # self.message_port_register_in(pmt.intern('rx'))
-
-        # self.set_msg_handler(pmt.intern('tx'), self.handle_tx)
-        # self.set_msg_handler(pmt.intern('rx'), self.handle_rx)
 
         # Metrics output
         self.message_port_register_out(pmt.intern('metrics'))
-        from collections import deque
-        self.tx_fifo = deque()
+
+        # Running totals (lifetime)
         self.total_bits = 0
-        self.error_bits = 0
+        self.total_bit_errors = 0
+
+        # Windowed BER state
         self.window_symbols = 0
         self.window_errors = 0
         self.WINDOW_SIZE = 10000
 
 
     def work(self, input_items, output_items):
-        # This block is triggered by incoming messages, so we don't need to do anything here
+        # Receive synchronized TX/RX streams.
         tx = input_items[0]
         rx = input_items[1]
-        print("TX:", tx[:10])
-        print("RX:", rx[:10])
+        # print("TX:", tx[:10])
+        # print("RX:", rx[:10])
         n = min(len(tx), len(rx))
-        print("WORK called with", n, "items")
+        print("[BER] work() items:", n)
+        if n == 0:
+            return 0
+        
 
-        errors = 0
-        for i in range(n):
-            # diff = tx[i] ^ rx[i]
-            # errors += bin(diff).count("1")
-            if tx[i] != rx[i]:
-                errors += 1
+        # Compare only the common region if buffers differ in length.
+        tx_view = tx[:n]
+        rx_view = rx[:n]
+        bit_errors = int(np.sum(tx_view != rx_view))
 
-        # self.total_bits += n * 2
-        # self.total_bits += n 
-        # self.error_bits += errors
+        # Update running totals.
+        self.total_bits += n
+        self.total_bit_errors += bit_errors
 
-        # ber = self.error_bits / self.total_bits if self.total_bits > 0 else 0.0
-        # ber = errors / n if n > 0 else 0.0
-        # print(f"Current BER: {ber:.6f} ({errors} errors out of {n} bits)")
-        WINDOW_SIZE = 10000
-
+        print(f"[BER] chunk errors: {bit_errors}/{n}")
+        print(f"[BER] totals: bits={self.total_bits}, errors={self.total_bit_errors}")
+        with open("/tmp/phy_stats.txt", "w") as f:
+            f.write(f"{self.total_bits},{self.total_bit_errors}\n")
+            
         self.window_symbols += n
-        self.window_errors += errors
+        self.window_errors += bit_errors
 
-        if self.window_symbols >= WINDOW_SIZE:
+        # Publish BER once enough symbols have been collected.
+        if self.window_symbols >= self.WINDOW_SIZE:
             ber = self.window_errors / self.window_symbols
             
-            print("WINDOW BER:", ber)
-            
-            
+            print("[BER] window ber:", ber)
                 
             # Send metrics as a dictionary
             metrics = {
@@ -89,11 +85,9 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
             u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))
             self.message_port_pub(pmt.intern('metrics'), u8vec)
 
-            #RESET WINDOW
+            # Reset window counters after publishing.
             self.window_symbols = 0
             self.window_errors = 0
             
         return n
-    # def reset(self):
-    #     self.total_bits = 0
-    #     self.error_bits = 0
+

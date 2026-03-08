@@ -385,43 +385,40 @@ blocks:
       \ them are required to have default values!\n\"\"\"\n\nimport json\nfrom time\
       \ import time\n\nimport numpy as np\nfrom gnuradio import gr\nimport pmt\n#\
       \ BER comparator\nclass blk(gr.sync_block):  # other base classes are basic_block,\
-      \ decim_block, interp_block\n    \"\"\"Embedded Python Block example - a simple\
-      \ multiply const\"\"\"\n\n    def __init__(self):  # only default arguments\
-      \ here\n        \"\"\"arguments to this function show up as parameters in GRC\"\
-      \"\"\n        gr.sync_block.__init__(\n            self,\n            name='ber_comparator',\
+      \ decim_block, interp_block\n    \"\"\"Compare TX/RX byte streams and publish\
+      \ BER metrics.\"\"\"\n\n    def __init__(self):  # only default arguments here\n\
+      \        \"\"\"arguments to this function show up as parameters in GRC\"\"\"\
+      \n        gr.sync_block.__init__(\n            self,\n            name='ber_comparator',\
       \   # will show up in GRC\n            in_sig=[np.uint8, np.uint8],  # two input\
-      \ streams of bytes\n            out_sig=None\n        )\n        # Two message\
-      \ inputs\n        # self.message_port_register_in(pmt.intern('tx'))\n      \
-      \  # self.message_port_register_in(pmt.intern('rx'))\n\n        # self.set_msg_handler(pmt.intern('tx'),\
-      \ self.handle_tx)\n        # self.set_msg_handler(pmt.intern('rx'), self.handle_rx)\n\
-      \n        # Metrics output\n        self.message_port_register_out(pmt.intern('metrics'))\n\
-      \        from collections import deque\n        self.tx_fifo = deque()\n   \
-      \     self.total_bits = 0\n        self.error_bits = 0\n        self.window_symbols\
-      \ = 0\n        self.window_errors = 0\n        self.WINDOW_SIZE = 10000\n\n\n\
-      \    def work(self, input_items, output_items):\n        # This block is triggered\
-      \ by incoming messages, so we don't need to do anything here\n        tx = input_items[0]\n\
-      \        rx = input_items[1]\n        print(\"TX:\", tx[:10])\n        print(\"\
-      RX:\", rx[:10])\n        n = min(len(tx), len(rx))\n        print(\"WORK called\
-      \ with\", n, \"items\")\n\n        errors = 0\n        for i in range(n):\n\
-      \            # diff = tx[i] ^ rx[i]\n            # errors += bin(diff).count(\"\
-      1\")\n            if tx[i] != rx[i]:\n                errors += 1\n\n      \
-      \  # self.total_bits += n * 2\n        # self.total_bits += n \n        # self.error_bits\
-      \ += errors\n\n        # ber = self.error_bits / self.total_bits if self.total_bits\
-      \ > 0 else 0.0\n        # ber = errors / n if n > 0 else 0.0\n        # print(f\"\
-      Current BER: {ber:.6f} ({errors} errors out of {n} bits)\")\n        WINDOW_SIZE\
-      \ = 10000\n\n        self.window_symbols += n\n        self.window_errors +=\
-      \ errors\n\n        if self.window_symbols >= WINDOW_SIZE:\n            ber\
-      \ = self.window_errors / self.window_symbols\n            \n            print(\"\
-      WINDOW BER:\", ber)\n            \n            \n                \n        \
-      \    # Send metrics as a dictionary\n            metrics = {\n             \
-      \   'ber': ber,\n                # 'total_bits': self.total_bits,\n        \
-      \        # 'error_bits': self.error_bits,\n                'timestamp': time()\n\
+      \ streams of bytes\n            out_sig=None\n        )\n\n        # Metrics\
+      \ output\n        self.message_port_register_out(pmt.intern('metrics'))\n\n\
+      \        # Running totals (lifetime)\n        self.total_bits = 0\n        self.total_bit_errors\
+      \ = 0\n\n        # Windowed BER state\n        self.window_symbols = 0\n   \
+      \     self.window_errors = 0\n        self.WINDOW_SIZE = 10000\n\n\n    def\
+      \ work(self, input_items, output_items):\n        # Receive synchronized TX/RX\
+      \ streams.\n        tx = input_items[0]\n        rx = input_items[1]\n     \
+      \   # print(\"TX:\", tx[:10])\n        # print(\"RX:\", rx[:10])\n        n\
+      \ = min(len(tx), len(rx))\n        print(\"[BER] work() items:\", n)\n     \
+      \   if n == 0:\n            return 0\n        \n\n        # Compare only the\
+      \ common region if buffers differ in length.\n        tx_view = tx[:n]\n   \
+      \     rx_view = rx[:n]\n        bit_errors = int(np.sum(tx_view != rx_view))\n\
+      \n        # Update running totals.\n        self.total_bits += n\n        self.total_bit_errors\
+      \ += bit_errors\n\n        print(f\"[BER] chunk errors: {bit_errors}/{n}\")\n\
+      \        print(f\"[BER] totals: bits={self.total_bits}, errors={self.total_bit_errors}\"\
+      )\n        with open(\"/tmp/phy_stats.txt\", \"w\") as f:\n            f.write(f\"\
+      {self.total_bits},{self.total_bit_errors}\\n\")\n            \n        self.window_symbols\
+      \ += n\n        self.window_errors += bit_errors\n\n        # Publish BER once\
+      \ enough symbols have been collected.\n        if self.window_symbols >= self.WINDOW_SIZE:\n\
+      \            ber = self.window_errors / self.window_symbols\n            \n\
+      \            print(\"[BER] window ber:\", ber)\n                \n         \
+      \   # Send metrics as a dictionary\n            metrics = {\n              \
+      \  'ber': ber,\n                # 'total_bits': self.total_bits,\n         \
+      \       # 'error_bits': self.error_bits,\n                'timestamp': time()\n\
       \            }\n\n            msg_json = json.dumps(metrics).encode('utf-8')\n\
       \            u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))\n    \
       \        self.message_port_pub(pmt.intern('metrics'), u8vec)\n\n           \
-      \ #RESET WINDOW\n            self.window_symbols = 0\n            self.window_errors\
-      \ = 0\n            \n        return n\n    # def reset(self):\n    #     self.total_bits\
-      \ = 0\n    #     self.error_bits = 0\n"
+      \ # Reset window counters after publishing.\n            self.window_symbols\
+      \ = 0\n            self.window_errors = 0\n            \n        return n\n\n"
     affinity: ''
     alias: ''
     comment: ''
@@ -429,8 +426,8 @@ blocks:
     minoutbuf: '0'
   states:
     _io_cache: ('ber_comparator', 'blk', [], [('0', 'byte', 1), ('1', 'byte', 1)],
-      [('metrics', 'message', 1)], 'Embedded Python Block example - a simple multiply
-      const', [])
+      [('metrics', 'message', 1)], 'Compare TX/RX byte streams and publish BER metrics.',
+      [])
     bus_sink: false
     bus_source: false
     bus_structure: null

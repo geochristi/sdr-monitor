@@ -11,6 +11,7 @@ class PhyMetricsEngine:
         self.rssi_filter = MovingAverage(5)
         self.snr_filter = MovingAverage(5)
         
+        
 
     def update(self, data: dict):
         if 'rssi' in data:
@@ -34,5 +35,6 @@ class PhyMetricsEngine:
     def get_metrics(self, name: str):
         return getattr(self.metrics, name, None)
     
+    # it will only get the metrics that are defined in the PhyMetrics dataclass, so it won't return anything extra that might be in the data dict but not in the dataclass
     def get_all(self):
         return self.metrics

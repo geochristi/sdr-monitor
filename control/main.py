@@ -1,7 +1,9 @@
 import time
-
+import json
 from transport.zmq_sub import ZMQSubscriber
 from phy_metrics.metrics_engine import PhyMetricsEngine
+
+# Subscribes to PHY telemetry, feeds it into the metrics engine, prints metrics/alarms, and loops continuously with a short sleep.
 
 def main():
     subscriber = ZMQSubscriber()
