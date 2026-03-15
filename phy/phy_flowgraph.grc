@@ -9,7 +9,7 @@ options:
     description: ''
     gen_cmake: 'On'
     gen_linking: dynamic
-    generate_options: no_gui
+    generate_options: qt_gui
     hier_block_src_path: '.:'
     id: phy_flowgraph
     max_nouts: '0'
@@ -70,15 +70,24 @@ blocks:
     rotation: 0
     state: enabled
 - name: noise_voltage
-  id: variable
+  id: variable_qtgui_range
   parameters:
     comment: ''
-    value: '0.5'
+    gui_hint: ''
+    label: ''
+    min_len: '200'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.1'
+    stop: '50'
+    value: '20'
+    widget: counter_slider
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [312, 16.0]
+    coordinate: [320, 496.0]
     rotation: 0
     state: enabled
 - name: samp_rate
@@ -91,43 +100,6 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [184, 12]
-    rotation: 0
-    state: enabled
-- name: analog_noise_source_x_0
-  id: analog_noise_source_x
-  parameters:
-    affinity: ''
-    alias: ''
-    amp: '1'
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    noise_type: analog.GR_GAUSSIAN
-    seed: '0'
-    type: complex
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [160, 712.0]
-    rotation: 0
-    state: enabled
-- name: blocks_add_xx_0
-  id: blocks_add_xx
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    num_inputs: '2'
-    type: complex
-    vlen: '1'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1064, 720.0]
     rotation: 0
     state: enabled
 - name: blocks_message_strobe_0
@@ -145,24 +117,6 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [72, 344.0]
-    rotation: 0
-    state: enabled
-- name: blocks_multiply_const_vxx_0
-  id: blocks_multiply_const_vxx
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    const: noise_voltage
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    type: complex
-    vlen: '1'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [352, 728.0]
     rotation: 0
     state: enabled
 - name: blocks_repack_bits_bb_0
@@ -394,15 +348,15 @@ blocks:
       \ output\n        self.message_port_register_out(pmt.intern('metrics'))\n\n\
       \        # Running totals (lifetime)\n        self.total_bits = 0\n        self.total_bit_errors\
       \ = 0\n\n        # Windowed BER state\n        self.window_symbols = 0\n   \
-      \     self.window_errors = 0\n        self.WINDOW_SIZE = 10000\n\n\n    def\
-      \ work(self, input_items, output_items):\n        # Receive synchronized TX/RX\
-      \ streams.\n        tx = input_items[0]\n        rx = input_items[1]\n     \
-      \   # print(\"TX:\", tx[:10])\n        # print(\"RX:\", rx[:10])\n        n\
-      \ = min(len(tx), len(rx))\n        print(\"[BER] work() items:\", n)\n     \
-      \   if n == 0:\n            return 0\n        \n\n        # Compare only the\
-      \ common region if buffers differ in length.\n        tx_view = tx[:n]\n   \
-      \     rx_view = rx[:n]\n        bit_errors = int(np.sum(tx_view != rx_view))\n\
-      \n        # Update running totals.\n        self.total_bits += n\n        self.total_bit_errors\
+      \     self.window_errors = 0\n        self.WINDOW_SIZE = 1000\n\n\n    def work(self,\
+      \ input_items, output_items):\n        # Receive synchronized TX/RX streams.\n\
+      \        tx = input_items[0]\n        rx = input_items[1]\n        # print(\"\
+      TX:\", tx[:10])\n        # print(\"RX:\", rx[:10])\n        n = min(len(tx),\
+      \ len(rx))\n        print(\"[BER] work() items:\", n)\n        if n == 0:\n\
+      \            return 0\n        \n\n        # Compare only the common region\
+      \ if buffers differ in length.\n        tx_view = tx[:n]\n        rx_view =\
+      \ rx[:n]\n        bit_errors = int(np.sum(tx_view != rx_view))\n\n        #\
+      \ Update running totals.\n        self.total_bits += n\n        self.total_bit_errors\
       \ += bit_errors\n\n        print(f\"[BER] chunk errors: {bit_errors}/{n}\")\n\
       \        print(f\"[BER] totals: bits={self.total_bits}, errors={self.total_bit_errors}\"\
       )\n        # with open(\"/tmp/phy_stats.txt\", \"w\") as f:\n        #     f.write(f\"\
@@ -432,6 +386,54 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [1800, 48.0]
+    rotation: 0
+    state: enabled
+- name: epy_block_3
+  id: epy_block
+  parameters:
+    _source_code: "\"\"\"\nEmbedded Python Blocks:\n\nEach time this file is saved,\
+      \ GRC will instantiate the first class it finds\nto get ports and parameters\
+      \ of your block. The arguments to __init__  will\nbe the parameters. All of\
+      \ them are required to have default values!\n\"\"\"\n\nimport numpy as np\n\
+      from gnuradio import gr\nimport time\n\nCONTROL_FILE = \"/home/georgia/Desktop/SDR/control/phy_control.txt\"\
+      \n\n\nclass blk(gr.sync_block):\n    \"\"\"Adds controllable complex Gaussian\
+      \ noise to a complex stream\"\"\"\n\n    def __init__(self, noise_voltage=0.0,\
+      \ poll_interval=0.2):\n        gr.sync_block.__init__(\n            self,\n\
+      \            name='SNMP Noise Control',\n            in_sig=[np.complex64],\n\
+      \            out_sig=[np.complex64]\n        )\n        self.noise_voltage =\
+      \ float(noise_voltage)\n        self.last_noise = float(noise_voltage)\n   \
+      \     self.poll_interval = float(poll_interval)\n        self._last_poll = 0.0\n\
+      \n    def _update_noise_from_file(self):\n        now = time.monotonic()\n \
+      \       if now - self._last_poll < self.poll_interval:\n            return\n\
+      \n        self._last_poll = now\n\n        try:\n            with open(CONTROL_FILE)\
+      \ as f:\n                for line in f:\n                    if line.startswith(\"\
+      noise=\"):\n                        noise_value = float(line.split(\"=\", 1)[1].strip())\n\
+      \                        if noise_value != self.last_noise:\n              \
+      \              self.noise_voltage = noise_value\n                          \
+      \  self.last_noise = noise_value\n                        break\n        except\
+      \ Exception:\n            pass\n\n    def work(self, input_items, output_items):\n\
+      \        self._update_noise_from_file()\n\n        in0 = input_items[0]\n  \
+      \      out = output_items[0]\n\n        if self.noise_voltage <= 0.0:\n    \
+      \        out[:] = in0\n            return len(out)\n\n        sigma = self.noise_voltage\
+      \ / np.sqrt(2.0)\n        \n        noise_real = np.random.normal(0.0, sigma,\
+      \ len(in0)).astype(np.float32)\n        noise_imag = np.random.normal(0.0, sigma,\
+      \ len(in0)).astype(np.float32)\n\n        out[:] = in0 + noise_real + 1j * noise_imag\n\
+      \        return len(out)"
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    noise_voltage: '0.0'
+    poll_interval: '0.2'
+  states:
+    _io_cache: ('SNMP Noise Control', 'blk', [('noise_voltage', '0.0'), ('poll_interval',
+      '0.2')], [('0', 'complex', 1)], [('0', 'complex', 1)], 'Adds controllable complex
+      Gaussian noise to a complex stream', ['noise_voltage', 'poll_interval'])
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [472, 800.0]
     rotation: 0
     state: enabled
 - name: import_0
@@ -477,6 +479,98 @@ blocks:
     coordinate: [528, 344.0]
     rotation: 0
     state: enabled
+- name: qtgui_const_sink_x_0
+  id: qtgui_const_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'False'
+    axislabels: 'True'
+    color1: '"blue"'
+    color10: '"dark blue"'
+    color2: '"red"'
+    color3: '"green"'
+    color4: '"black"'
+    color5: '"cyan"'
+    color6: '"magenta"'
+    color7: '"yellow"'
+    color8: '"dark red"'
+    color9: '"dark green"'
+    comment: ''
+    grid: 'False'
+    gui_hint: ''
+    label1: ''
+    label10: ''
+    label2: ''
+    label3: ''
+    label4: ''
+    label5: ''
+    label6: ''
+    label7: ''
+    label8: ''
+    label9: ''
+    legend: 'True'
+    marker1: '0'
+    marker10: '0'
+    marker2: '0'
+    marker3: '0'
+    marker4: '0'
+    marker5: '0'
+    marker6: '0'
+    marker7: '0'
+    marker8: '0'
+    marker9: '0'
+    name: '""'
+    nconnections: '1'
+    size: '1024'
+    style1: '0'
+    style10: '0'
+    style2: '0'
+    style3: '0'
+    style4: '0'
+    style5: '0'
+    style6: '0'
+    style7: '0'
+    style8: '0'
+    style9: '0'
+    tr_chan: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_slope: qtgui.TRIG_SLOPE_POS
+    tr_tag: '""'
+    type: complex
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    xmax: '2'
+    xmin: '-2'
+    ymax: '2'
+    ymin: '-2'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1184, 824.0]
+    rotation: 0
+    state: enabled
 - name: zeromq_pub_msg_sink_0
   id: zeromq_pub_msg_sink
   parameters:
@@ -511,16 +605,13 @@ blocks:
     state: enabled
 
 connections:
-- [analog_noise_source_x_0, '0', blocks_multiply_const_vxx_0, '0']
-- [blocks_add_xx_0, '0', digital_constellation_decoder_cb_0, '0']
 - [blocks_message_strobe_0, strobe, epy_block_0, trigger]
-- [blocks_multiply_const_vxx_0, '0', blocks_add_xx_0, '1']
 - [blocks_repack_bits_bb_0, '0', blocks_selector_1, '1']
 - [blocks_repack_bits_bb_0, '0', digital_diff_encoder_bb_0, '0']
 - [blocks_repack_bits_bb_0, '0', epy_block_1, '0']
 - [blocks_selector_1, '0', digital_constellation_encoder_bc_0, '0']
 - [blocks_selector_1_0, '0', epy_block_1, '1']
-- [blocks_throttle2_0, '0', blocks_add_xx_0, '0']
+- [blocks_throttle2_0, '0', epy_block_3, '0']
 - [digital_constellation_decoder_cb_0, '0', blocks_selector_1_0, '1']
 - [digital_constellation_decoder_cb_0, '0', digital_diff_decoder_bb_0, '0']
 - [digital_constellation_encoder_bc_0, '0', blocks_throttle2_0, '0']
@@ -529,6 +620,8 @@ connections:
 - [epy_block_0, out, pdu_pdu_to_tagged_stream_0, pdus]
 - [epy_block_0, out, zeromq_pub_msg_sink_0, in]
 - [epy_block_1, metrics, zeromq_pub_msg_sink_0_0, in]
+- [epy_block_3, '0', digital_constellation_decoder_cb_0, '0']
+- [epy_block_3, '0', qtgui_const_sink_x_0, '0']
 - [pdu_pdu_to_tagged_stream_0, '0', blocks_repack_bits_bb_0, '0']
 
 metadata:

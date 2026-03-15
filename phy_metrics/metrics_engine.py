@@ -45,3 +45,8 @@ class PhyMetricsEngine:
     # it will only get the metrics that are defined in the PhyMetrics dataclass, so it won't return anything extra that might be in the data dict but not in the dataclass
     def get_all(self):
         return self.metrics
+    
+    def reset_ber(self):
+        self.metrics.bits = 0
+        self.metrics.errors = 0
+        self.metrics.ber = 0.0

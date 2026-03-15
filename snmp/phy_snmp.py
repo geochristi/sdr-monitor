@@ -15,6 +15,18 @@ subscriber = ZMQSubscriber()
 engine = PhyMetricsEngine()
 
 CONTROL_FILE = "/home/georgia/Desktop/SDR/control/phy_control.txt"
+noise_value = 0.0
+reset_bits_base = 0
+reset_errors_base = 0
+
+# Ensure control file exists with a default value
+if not os.path.exists(CONTROL_FILE):
+    try:
+        with open(CONTROL_FILE, "w") as f:
+            f.write("noise=0.1\n")
+    except Exception:
+        pass
+
 # NOTE: Avoid printing to stdout. pass_persist uses stdout for the SNMP protocol.
 # Debug messages must go to stderr or a log file.
 def update_metrics():
@@ -24,56 +36,67 @@ def update_metrics():
         engine.update(data)
 
 def read_noise():
+    global noise_value
     try:
         with open(CONTROL_FILE) as f:
             for line in f:
-                if line.startswith("noise="):
-                    return float(line.split("=")[1])
+                k, v = line.strip().split("=")
+                if k == "noise":
+                    noise_value = float(v)
     except:
         pass
-    return 0
+    return noise_value
 
 
 def write_noise(value):
+    global noise_value
+    noise_value = value
     with open(CONTROL_FILE, "w") as f:
-        f.write(f"noise={value}\n")
+        f.write(f"noise={noise_value}\n")
 
 def compute_ber(bits, errors):
     ber = errors / bits if bits > 0 else 0.0
     return str(round(ber,6))
 
+def normalize_oid(oid: str) -> str:
+    oid = oid.strip()
+    return oid[:-2] if oid.endswith(".0") else oid
+
+def instance_oid(oid: str) -> str:
+    oid = normalize_oid(oid)
+    return oid + ".0"
+
+def get_effective_metrics():
+    bits_raw = engine.get_metrics("bits") or 0
+    errors_raw = engine.get_metrics("errors") or 0
+
+    bits = max(0, bits_raw - reset_bits_base)
+    errors = max(0, errors_raw - reset_errors_base)
+    ber = (errors / bits) if bits > 0 else 0.0
+    return bits, errors, ber
+
 def handle_get(oid):
-    #print("DEBUG:", repr(oid), file=sys.stderr)
     update_metrics()
-    if oid.startswith(OID_NOISE):
-        return "integer", int(read_noise() * 10)  # Scale noise by 10 for better SNMP representation
+    oid_n = normalize_oid(oid)
+    bits, errors, ber = get_effective_metrics()
 
-    elif oid == OID_BITS:
-        bits = engine.get_metrics("bits")
-        return "integer", bits if bits is not None else 0
+    if oid_n == normalize_oid(OID_NOISE):
+        return "integer", int(read_noise() * 10)
 
-    elif oid == OID_ERRORS:
-        errors = engine.get_metrics("errors")
-        return "integer", errors if errors is not None else 0
-    # TODO IF-MIB is currently used by the system and we need to bypass it
-    # elif oid == ".1.3.6.1.2.1.2.2.1.10.1":   # ifInOctets
-    #     # ifinOctets is bits/8 since it's counting bytes, not bits
-    #     bits, errors = engine.get_metrics()
-    #     octets = bits // 8
-    #     return "integer", octets
+    elif oid_n == normalize_oid(OID_BITS):
+        return "integer", bits
 
-    # elif oid == ".1.3.6.1.2.1.2.2.1.14.1": # ifInErrors
-    #     bits, errors = engine.get_metrics()
-    #     return "integer", errors
+    elif oid_n == normalize_oid(OID_ERRORS):
+        return "integer", errors
 
-    elif oid == OID_BER:
-        # bits = engine.get_metrics("bits")
-        # errors = engine.get_metrics("errors")
-        # return "string", compute_ber(bits, errors)
-        ber = engine.get_metrics("ber")
-        return "string", str(round(ber, 6)) if ber is not None else "0"
+    elif oid_n == normalize_oid(OID_BER):
+        return "string", str(round(ber, 6))
+
+    elif oid_n == normalize_oid(OID_RESET_BER):
+        return "integer", 0
 
     return None
+
 def oid_to_tuple(oid):
     return tuple(int(x) for x in oid.strip(".").split("."))
 
@@ -82,9 +105,10 @@ def oid_gt(a, b):
     return oid_to_tuple(a) > oid_to_tuple(b)
 
 def handle_getnext(oid):
-    sorted_oids = sorted(OIDS, key=oid_to_tuple)
+    oid_n = normalize_oid(oid)
+    sorted_oids = sorted([normalize_oid(o) for o in OIDS], key=oid_to_tuple)
     for o in sorted_oids:
-        if oid_gt(o, oid):
+        if oid_gt(o, oid_n):
             value = handle_get(o)
             if value:
                 typ, val = value
@@ -92,47 +116,61 @@ def handle_getnext(oid):
     return None
 
 def handle_set(oid, value):
-    if oid == OID_NOISE:
+    global reset_bits_base, reset_errors_base
+    oid_n = normalize_oid(oid)
+
+    if oid_n == normalize_oid(OID_NOISE):
         try:
-            write_noise(value / 10) # because noise usually is < 1
+            value = max(0.0, min(value / 10, 10.0))
+            write_noise(value)
             return True
         except ValueError:
             return False
+
+    elif oid_n == normalize_oid(OID_RESET_BER):
+        if int(value) == 1:
+            update_metrics()
+            reset_bits_base = engine.get_metrics("bits") or 0
+            reset_errors_base = engine.get_metrics("errors") or 0
+            try:
+                engine.reset_ber()  # optional; keep if implemented
+            except Exception:
+                pass
+            return True
+        return False
+
     return False
 
 def main():
     while True:
-
         cmd = sys.stdin.readline()
-
         if not cmd:
             break
-        
-        cmd = cmd.strip()   
+
+        cmd = cmd.strip()
 
         if cmd == "PING":
             print("PONG")
             sys.stdout.flush()
             continue
 
-
         elif cmd == "get":
             oid = sys.stdin.readline().strip()
             result = handle_get(oid)
             if result:
                 typ, val = result
-                print(oid+ ".0")  # Append .0 for scalar OIDs
+                print(instance_oid(oid))   # fixed: no double .0
                 print(typ)
                 print(val)
             else:
                 print("NONE")
-        
+
         elif cmd == "getnext":
             oid = sys.stdin.readline().strip()
             result = handle_getnext(oid)
             if result:
                 o, typ, val = result
-                print(o + ".0")  # Append .0 for scalar OIDs
+                print(instance_oid(o))
                 print(typ)
                 print(val)
             else:

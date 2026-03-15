@@ -35,7 +35,7 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
         # Windowed BER state
         self.window_symbols = 0
         self.window_errors = 0
-        self.WINDOW_SIZE = 10000
+        self.WINDOW_SIZE = 1000
 
 
     def work(self, input_items, output_items):

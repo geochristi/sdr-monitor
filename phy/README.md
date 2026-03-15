@@ -65,3 +65,30 @@ python3 mock_publisher.py
 ```
 
 This publishes random JSON metrics once per second on `tcp://127.0.0.1:5556`.
+
+## Ports and Integration (Important)
+
+The flowgraph uses two ZMQ PUB endpoints:
+
+- `tcp://127.0.0.1:5555`
+- `tcp://127.0.0.1:5556`
+
+For this project, the SNMP/monitor subscriber is expected to read telemetry from:
+
+- `tcp://127.0.0.1:5556`
+
+If you change the endpoint in GNU Radio, update the subscriber config too, otherwise metrics and BER/reset behavior in SNMP will appear broken.
+
+## Noise control file used by PHY block
+
+The Embedded Python noise-control block reads:
+
+- `/home/georgia/Desktop/SDR/control/phy_control.txt`
+
+Format:
+
+```txt
+noise=0.1
+```
+
+SNMP `set` on `phyNoise.0` should update this file, and the PHY block applies it during runtime.

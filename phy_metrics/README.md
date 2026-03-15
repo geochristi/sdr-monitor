@@ -63,3 +63,31 @@ print(alarms)
 ## Integration Point
 
 This module is used by `control/main.py`, which receives telemetry via `transport/zmq_sub.py` and feeds each message into `PhyMetricsEngine`.
+
+## BER / Counter Reset Behavior (Important)
+
+`PhyMetricsEngine` processes incoming telemetry and typically receives cumulative
+`bits` and `errors` counters from the publisher side.
+
+Because of that:
+
+- Calling reset only in the SNMP layer does **not** change upstream cumulative counters.
+- On the next telemetry packet, raw totals continue increasing from the source.
+
+### Recommended reset model
+
+Use an SNMP-side baseline reset:
+
+- Store `reset_bits_base` = current raw bits at reset time.
+- Store `reset_errors_base` = current raw errors at reset time.
+- Report effective counters as:
+  - `bits_effective = max(0, bits_raw - reset_bits_base)`
+  - `errors_effective = max(0, errors_raw - reset_errors_base)`
+  - `ber_effective = errors_effective / bits_effective` (if `bits_effective > 0`)
+
+This provides user-visible reset semantics even when publisher counters are cumulative.
+
+### True source reset
+
+If you need absolute reset across all consumers, implement reset in the telemetry
+publisher/transmitter that owns the original counters.

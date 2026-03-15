@@ -1,41 +1,59 @@
 # SNMP (PHY metrics)
 
-This folder contains the SNMP integration used to expose PHY metrics
-from the GNU Radio physical layer.
+This folder contains the SNMP integration that exposes GNU Radio PHY metrics via `snmpd` `pass_persist`.
 
 ## Files
 
-- `snmp_extend.conf` - local `snmpd` configuration used for testing.
-- `phy_snmp.py` - `pass_persist` script used by SNMP for PHY metric get/getnext/set.
+- `snmp_extend.conf` - local `snmpd` config for testing
+- `phy_snmp.py` - `pass_persist` handler (`get`, `getnext`, `set`)
+- `oids.py` - OID constants used by the handler
+- `mib/PHY-MIB.txt` - MIB definition
+
+## Run SNMP Agent (test mode)
 
 ```bash
 sudo snmpd -f -Lo -C -c ~/Desktop/SDR/snmp/snmp_extend.conf
 ```
 
+## OID Map (enterprise: `.1.3.6.1.4.1.53864`)
+
+- `phyNoise.0`    → `.1.3.6.1.4.1.53864.1.1.0` (read-write, integer scaled by 10)
+- `phyBits.0`     → `.1.3.6.1.4.1.53864.1.2.0` (read-only)
+- `phyErrors.0`   → `.1.3.6.1.4.1.53864.1.3.0` (read-only)
+- `phyBER.0`      → `.1.3.6.1.4.1.53864.1.4.0` (read-only string)
+- `phyResetBER.0` → `.1.3.6.1.4.1.53864.1.5.0` (read-write, write `1` to reset effective counters; read returns `0`)
+
 ## Test
 
-From another terminal, query the custom PHY enterprise subtree:
+Walk subtree:
 
 ```bash
 snmpwalk -v2c -c public localhost .1.3.6.1.4.1.53864
 ```
 
-Set PHY noise (read-write community):
+Set noise:
 
 ```bash
 snmpset -v2c -c private localhost .1.3.6.1.4.1.53864.1.1.0 i 5
 ```
 
-Notes on set value:
+Reset BER/counters baseline:
 
-- `OID_NOISE` is `.1.3.6.1.4.1.53864.1.1.0`.
-- `phy_snmp.py` stores noise as `value / 10` in `control/phy_control.txt`.
-- Example: setting `i 5` writes `noise=0.5`.
+```bash
+snmpset -v2c -c private localhost .1.3.6.1.4.1.53864.1.5.0 i 1
+```
 
-## Notes
+Read back reset OID:
 
-- `snmp_extend.conf` binds SNMP to `127.0.0.1` only.
-- Community `public` is read-only and restricted to localhost.
-- Community `private` is read-write and needed for `snmpset`.
-- PHY metrics are currently read from `/tmp/phy_stats.txt`.
-- OIDs are under `.1.3.6.1.4.1.53864` via `pass_persist`.
+```bash
+snmpget -v2c -c public localhost .1.3.6.1.4.1.53864.1.5.0
+```
+
+## Behavior Notes
+
+- `phyNoise.0` stores `value/10` to:
+  - `/home/georgia/Desktop/SDR/control/phy_control.txt`
+  - Example: `i 5` → `noise=0.5`
+- Metrics are consumed from the ZMQ subscriber path used by `phy_snmp.py` (`transport/zmq_sub.py` + `phy_metrics`), not from `/tmp/phy_stats.txt`.
+- `snmp_extend.conf` binds to `127.0.0.1` for local testing.
+- `public` is read-only; `private` is required for `snmpset`.
