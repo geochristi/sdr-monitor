@@ -18,7 +18,7 @@ options:
     qt_qss_theme: ''
     realtime_scheduling: ''
     run: 'True'
-    run_command: '{python} -u {filename}'
+    run_command: '{python} -u run_phy.py'
     run_options: prompt
     sizing_mode: fixed
     thread_safe_setters: ''
@@ -67,27 +67,6 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [800, 16.0]
-    rotation: 0
-    state: enabled
-- name: noise_voltage
-  id: variable_qtgui_range
-  parameters:
-    comment: ''
-    gui_hint: ''
-    label: ''
-    min_len: '200'
-    orient: QtCore.Qt.Horizontal
-    rangeType: float
-    start: '0'
-    step: '0.1'
-    stop: '50'
-    value: '20'
-    widget: counter_slider
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [320, 496.0]
     rotation: 0
     state: enabled
 - name: samp_rate
@@ -159,7 +138,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1224, 392.0]
+    coordinate: [1224, 424.0]
     rotation: 0
     state: enabled
 - name: blocks_selector_1_0
@@ -182,7 +161,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1672, 528.0]
+    coordinate: [2184, 336.0]
     rotation: 0
     state: enabled
 - name: blocks_throttle2_0
@@ -203,7 +182,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [712, 704.0]
+    coordinate: [1600, 624.0]
     rotation: 0
     state: enabled
 - name: digital_constellation_decoder_cb_0
@@ -223,7 +202,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1184, 728.0]
+    coordinate: [2000, 760.0]
     rotation: 0
     state: enabled
 - name: digital_constellation_encoder_bc_0
@@ -243,7 +222,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1440, 408.0]
+    coordinate: [1432, 536.0]
     rotation: 0
     state: enabled
 - name: digital_diff_decoder_bb_0
@@ -260,7 +239,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1496, 736.0]
+    coordinate: [2312, 768.0]
     rotation: 0
     state: enabled
 - name: digital_diff_encoder_bb_0
@@ -287,8 +266,9 @@ blocks:
       \ GRC will instantiate the first class it finds\nto get ports and parameters\
       \ of your block. The arguments to __init__  will\nbe the parameters. All of\
       \ them are required to have default values!\n\"\"\"\n\nimport numpy as np\n\
-      from gnuradio import gr\nimport pmt\nimport json\nfrom time import time\n\n\
-      class blk(gr.sync_block):  # other base classes are basic_block, decim_block,\
+      from gnuradio import gr\nimport pmt\nimport json\nfrom time import time, sleep\n\
+      import threading\n\nCONTROL_FILE = \"/home/georgia/Desktop/SDR/control/phy_control.txt\"\
+      \n\nclass blk(gr.sync_block):  # other base classes are basic_block, decim_block,\
       \ interp_block\n    \"\"\"Packet Generator Block - generates PDUs with random\
       \ bytes\"\"\"\n\n    def __init__(self, example_param=1.0):  # only default\
       \ arguments here\n        \"\"\"arguments to this function show up as parameters\
@@ -298,22 +278,32 @@ blocks:
       \        self.set_msg_handler(pmt.intern('trigger'), self.handle_msg)\n\n  \
       \      self.message_port_register_out(pmt.intern('out')) # packets\n       \
       \ self.message_port_register_out(pmt.intern('metrics')) # telemetry\n      \
-      \ \n        self.packet_id = 0\n\n    def handle_msg(self, msg):\n        length\
-      \ = 256\n\n        data = np.random.randint(0, 256, length, dtype=np.uint8)\n\
-      \n        # packet id on the first byte\n        data[0] = self.packet_id %\
-      \ 256\n        self.packet_id += 1\n\n        pdu = pmt.cons(pmt.PMT_NIL, pmt.init_u8vector(len(data),\
-      \ data.tolist()))\n\n        # publish pakcet \n        self.message_port_pub(pmt.intern('out'),\
-      \ pdu)\n\n        #publish telemetry\n        # self.publish_metrics()\n\n\n\
-      \n    def publish_metrics(self):\n        metrics = {\n            'snr': 12.5,\n\
-      \            'ber': 0.00003,\n            'rssi': -42.0,\n            # 'packet_id':\
-      \ self.packet_id,\n            # 'noise_voltage': noise_voltage,\n         \
-      \   'timestamp': time()\n        }\n        print(\"SENT:\", metrics)\n    \
-      \    msg = json.dumps(metrics).encode('utf-8')\n\n        # send directly as\
-      \ u8vector (no PDU wrapper )\n        u8vec = pmt.init_u8vector(len(msg), list(msg))\n\
-      \        self.message_port_pub(pmt.intern('metrics'), u8vec)\n        # msg_list\
-      \ = list(msg) # convert bytes to list of integers\n        # pdu = pmt.cons(pmt.PMT_NIL,\
-      \ pmt.init_u8vector(len(msg_list), msg_list))\n        # self.message_port_pub(pmt.intern('metrics'),\
-      \ pdu)"
+      \ \n        self.packet_id = 0\n        self.running = True\n        self.sender_thread\
+      \ = threading.Thread(target=self.run_sender, daemon=True)\n        self.sender_thread.start()\n\
+      \n    def read_packet_rate(self):\n        try:\n            with open(CONTROL_FILE,\
+      \ \"r\") as f:\n                for line in f:\n                    if line.startswith(\"\
+      rate=\"):\n                        return max(0, int(line.strip().split(\"=\"\
+      , 1)[1]))\n        except Exception:\n            pass\n        return 0\n\n\
+      \    def send_packet(self):\n        length = 256\n\n        data = np.random.randint(0,\
+      \ 256, length, dtype=np.uint8)\n\n        # packet id on the first byte\n  \
+      \      data[0] = self.packet_id % 256\n        self.packet_id += 1\n\n     \
+      \   pdu = pmt.cons(pmt.PMT_NIL, pmt.init_u8vector(len(data), data.tolist()))\n\
+      \n        # publish pakcet \n        self.message_port_pub(pmt.intern('out'),\
+      \ pdu)\n\n        #publish telemetry\n        # self.publish_metrics()\n\n \
+      \   def run_sender(self):\n        while self.running:\n            rate = self.read_packet_rate()\n\
+      \            if rate > 0:\n                self.send_packet()\n            \
+      \    sleep(1.0 / rate)\n            else:\n                sleep(0.2)\n\n  \
+      \  def handle_msg(self, msg):\n        self.send_packet()\n\n    def stop(self):\n\
+      \        self.running = False\n        return True\n\n    def publish_metrics(self):\n\
+      \        metrics = {\n            'snr': 12.5,\n            'ber': 0.00003,\n\
+      \            'rssi': -42.0,\n            # 'packet_id': self.packet_id,\n  \
+      \          # 'noise_voltage': noise_voltage,\n            'timestamp': time()\n\
+      \        }\n        print(\"SENT:\", metrics)\n        msg = json.dumps(metrics).encode('utf-8')\n\
+      \n        # send directly as u8vector (no PDU wrapper )\n        u8vec = pmt.init_u8vector(len(msg),\
+      \ list(msg))\n        self.message_port_pub(pmt.intern('metrics'), u8vec)\n\
+      \        # msg_list = list(msg) # convert bytes to list of integers\n      \
+      \  # pdu = pmt.cons(pmt.PMT_NIL, pmt.init_u8vector(len(msg_list), msg_list))\n\
+      \        # self.message_port_pub(pmt.intern('metrics'), pdu)"
     affinity: ''
     alias: ''
     comment: ''
@@ -333,46 +323,7 @@ blocks:
 - name: epy_block_1
   id: epy_block
   parameters:
-    _source_code: "\"\"\"\nEmbedded Python Blocks:\n\nEach time this file is saved,\
-      \ GRC will instantiate the first class it finds\nto get ports and parameters\
-      \ of your block. The arguments to __init__  will\nbe the parameters. All of\
-      \ them are required to have default values!\n\"\"\"\n\nimport json\nfrom time\
-      \ import time\n\nimport numpy as np\nfrom gnuradio import gr\nimport pmt\n#\
-      \ BER comparator\nclass blk(gr.sync_block):  # other base classes are basic_block,\
-      \ decim_block, interp_block\n    \"\"\"Compare TX/RX byte streams and publish\
-      \ BER metrics.\"\"\"\n\n    def __init__(self):  # only default arguments here\n\
-      \        \"\"\"arguments to this function show up as parameters in GRC\"\"\"\
-      \n        gr.sync_block.__init__(\n            self,\n            name='ber_comparator',\
-      \   # will show up in GRC\n            in_sig=[np.uint8, np.uint8],  # two input\
-      \ streams of bytes\n            out_sig=None\n        )\n\n        # Metrics\
-      \ output\n        self.message_port_register_out(pmt.intern('metrics'))\n\n\
-      \        # Running totals (lifetime)\n        self.total_bits = 0\n        self.total_bit_errors\
-      \ = 0\n\n        # Windowed BER state\n        self.window_symbols = 0\n   \
-      \     self.window_errors = 0\n        self.WINDOW_SIZE = 1000\n\n\n    def work(self,\
-      \ input_items, output_items):\n        # Receive synchronized TX/RX streams.\n\
-      \        tx = input_items[0]\n        rx = input_items[1]\n        # print(\"\
-      TX:\", tx[:10])\n        # print(\"RX:\", rx[:10])\n        n = min(len(tx),\
-      \ len(rx))\n        print(\"[BER] work() items:\", n)\n        if n == 0:\n\
-      \            return 0\n        \n\n        # Compare only the common region\
-      \ if buffers differ in length.\n        tx_view = tx[:n]\n        rx_view =\
-      \ rx[:n]\n        bit_errors = int(np.sum(tx_view != rx_view))\n\n        #\
-      \ Update running totals.\n        self.total_bits += n\n        self.total_bit_errors\
-      \ += bit_errors\n\n        print(f\"[BER] chunk errors: {bit_errors}/{n}\")\n\
-      \        print(f\"[BER] totals: bits={self.total_bits}, errors={self.total_bit_errors}\"\
-      )\n        # with open(\"/tmp/phy_stats.txt\", \"w\") as f:\n        #     f.write(f\"\
-      {self.total_bits},{self.total_bit_errors}\\n\")\n            \n        self.window_symbols\
-      \ += n\n        self.window_errors += bit_errors\n\n        # Publish BER once\
-      \ enough symbols have been collected.\n        if self.window_symbols >= self.WINDOW_SIZE:\n\
-      \            ber = self.window_errors / self.window_symbols\n            \n\
-      \            print(\"[BER] window ber:\", ber)\n                \n         \
-      \   # Send metrics as a dictionary\n            metrics = {\n              \
-      \  'ber': ber,\n                'bits': self.total_bits,\n                'errors':\
-      \ self.total_bit_errors,\n                'timestamp': time()\n            }\n\
-      \n            msg_json = json.dumps(metrics).encode('utf-8')\n            u8vec\
-      \ = pmt.init_u8vector(len(msg_json), list(msg_json))\n            self.message_port_pub(pmt.intern('metrics'),\
-      \ u8vec)\n\n            # Reset window counters after publishing.\n        \
-      \    self.window_symbols = 0\n            self.window_errors = 0\n         \
-      \   \n        return n\n\n"
+    _source_code: "\"\"\"\nEmbedded Python Blocks:\n\nEach time this file is saved, GRC will instantiate the first class it finds\nto get ports and parameters of your block. The arguments to __init__  will\nbe the parameters. All of them are required to have default values!\n\"\"\"\n\nimport json\nfrom time import time\n\nimport numpy as np\nfrom gnuradio import gr\nimport pmt\n\nCONTROL_FILE = \"/home/georgia/Desktop/SDR/control/phy_control.txt\"\n\n# BER comparator\nclass blk(gr.sync_block):  # other base classes are basic_block, decim_block, interp_block\n    \"\"\"Compare TX/RX byte streams and publish BER metrics.\"\"\"\n\n    def __init__(self):  # only default arguments here\n        \"\"\"arguments to this function show up as parameters in GRC\"\"\"\n        gr.sync_block.__init__(\n            self,\n            name='ber_comparator',   # will show up in GRC\n            in_sig=[np.uint8, np.uint8],  # two input streams of bytes\n            out_sig=None\n        )\n\n        # Metrics output\n        self.message_port_register_out(pmt.intern('metrics'))\n\n        # Running totals (lifetime)\n        self.total_bits = 0\n        self.total_bit_errors = 0\n\n        # Windowed BER state\n        self.window_symbols = 0\n        self.window_errors = 0\n        self.WINDOW_SIZE = 1000\n\n        # Controlled BER injection (0.0 .. 1.0 probability per compared symbol).\n        self.ber_inject = 0.0\n        self._last_poll = 0.0\n        self.poll_interval = 0.2\n\n    def _update_ber_inject_from_file(self):\n        now = time()\n        if now - self._last_poll < self.poll_interval:\n            return\n\n        self._last_poll = now\n        try:\n            with open(CONTROL_FILE, \"r\") as f:\n                for line in f:\n                    if line.startswith(\"ber_inject=\"):\n                        value = float(line.split(\"=\", 1)[1].strip())\n                        self.ber_inject = max(0.0, min(value, 1.0))\n                        break\n        except Exception:\n            pass\n\n\n    def work(self, input_items, output_items):\n        # Receive synchronized TX/RX streams.\n        tx = input_items[0]\n        rx = input_items[1]\n        self._update_ber_inject_from_file()\n        # print(\"TX:\", tx[:10])\n        # print(\"RX:\", rx[:10])\n        n = min(len(tx), len(rx))\n        print(\"[BER] work() items:\", n)\n        if n == 0:\n            return 0\n        \n\n        # Compare only the common region if buffers differ in length.\n        tx_view = tx[:n]\n        rx_view = rx[:n]\n\n        if self.ber_inject > 0.0:\n            rx_eval = rx_view.copy()\n            inject_mask = np.random.random(n) < self.ber_inject\n            rx_eval[inject_mask] = np.bitwise_xor(rx_eval[inject_mask], np.uint8(1))\n        else:\n            rx_eval = rx_view\n\n        bit_errors = int(np.sum(tx_view != rx_eval))\n\n        # Update running totals.\n        self.total_bits += n\n        self.total_bit_errors += bit_errors\n\n        print(f\"[BER] chunk errors: {bit_errors}/{n}\")\n        print(f\"[BER] totals: bits={self.total_bits}, errors={self.total_bit_errors}\")\n        # with open(\"/tmp/phy_stats.txt\", \"w\") as f:\n        #     f.write(f\"{self.total_bits},{self.total_bit_errors}\\n\")\n            \n        self.window_symbols += n\n        self.window_errors += bit_errors\n\n        # Publish BER once enough symbols have been collected.\n        if self.window_symbols >= self.WINDOW_SIZE:\n            ber = self.window_errors / self.window_symbols\n            \n            print(\"[BER] window ber:\", ber)\n                \n            # Send metrics as a dictionary\n            metrics = {\n                'ber': ber,\n                'bits': self.total_bits,\n                'errors': self.total_bit_errors,\n                'timestamp': time()\n            }\n\n            msg_json = json.dumps(metrics).encode('utf-8')\n            u8vec = pmt.init_u8vector(len(msg_json), list(msg_json))\n            self.message_port_pub(pmt.intern('metrics'), u8vec)\n\n            # Reset window counters after publishing.\n            self.window_symbols = 0\n            self.window_errors = 0\n            \n        return n\n\n"
     affinity: ''
     alias: ''
     comment: ''
@@ -385,55 +336,31 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1800, 48.0]
+    coordinate: [2208, 48.0]
     rotation: 0
     state: enabled
 - name: epy_block_3
   id: epy_block
   parameters:
-    _source_code: "\"\"\"\nEmbedded Python Blocks:\n\nEach time this file is saved,\
-      \ GRC will instantiate the first class it finds\nto get ports and parameters\
-      \ of your block. The arguments to __init__  will\nbe the parameters. All of\
-      \ them are required to have default values!\n\"\"\"\n\nimport numpy as np\n\
-      from gnuradio import gr\nimport time\n\nCONTROL_FILE = \"/home/georgia/Desktop/SDR/control/phy_control.txt\"\
-      \n\n\nclass blk(gr.sync_block):\n    \"\"\"Adds controllable complex Gaussian\
-      \ noise to a complex stream\"\"\"\n\n    def __init__(self, noise_voltage=0.0,\
-      \ poll_interval=0.2):\n        gr.sync_block.__init__(\n            self,\n\
-      \            name='SNMP Noise Control',\n            in_sig=[np.complex64],\n\
-      \            out_sig=[np.complex64]\n        )\n        self.noise_voltage =\
-      \ float(noise_voltage)\n        self.last_noise = float(noise_voltage)\n   \
-      \     self.poll_interval = float(poll_interval)\n        self._last_poll = 0.0\n\
-      \n    def _update_noise_from_file(self):\n        now = time.monotonic()\n \
-      \       if now - self._last_poll < self.poll_interval:\n            return\n\
-      \n        self._last_poll = now\n\n        try:\n            with open(CONTROL_FILE)\
-      \ as f:\n                for line in f:\n                    if line.startswith(\"\
-      noise=\"):\n                        noise_value = float(line.split(\"=\", 1)[1].strip())\n\
-      \                        if noise_value != self.last_noise:\n              \
-      \              self.noise_voltage = noise_value\n                          \
-      \  self.last_noise = noise_value\n                        break\n        except\
-      \ Exception:\n            pass\n\n    def work(self, input_items, output_items):\n\
-      \        self._update_noise_from_file()\n\n        in0 = input_items[0]\n  \
-      \      out = output_items[0]\n\n        if self.noise_voltage <= 0.0:\n    \
-      \        out[:] = in0\n            return len(out)\n\n        sigma = self.noise_voltage\
-      \ / np.sqrt(2.0)\n        \n        noise_real = np.random.normal(0.0, sigma,\
-      \ len(in0)).astype(np.float32)\n        noise_imag = np.random.normal(0.0, sigma,\
-      \ len(in0)).astype(np.float32)\n\n        out[:] = in0 + noise_real + 1j * noise_imag\n\
-      \        return len(out)"
+    _source_code: "\"\"\"\nEmbedded Python Blocks:\n\nEach time this file is saved, GRC will instantiate the first class it finds\nto get ports and parameters of your block. The arguments to __init__  will\nbe the parameters. All of them are required to have default values!\n\"\"\"\n\nimport numpy as np\nfrom gnuradio import gr\nimport time\n\nCONTROL_FILE = \"/home/georgia/Desktop/SDR/control/phy_control.txt\"\n\n\nclass blk(gr.sync_block):\n    \"\"\"Adds AWGN and frequency offset with runtime control from control file.\"\"\"\n\n    def __init__(self, noise_voltage=0.0, snr_db=30.0, poll_interval=0.2, sample_rate=100000.0):\n        gr.sync_block.__init__(\n            self,\n            name='SNMP Noise Control',\n            in_sig=[np.complex64],\n            out_sig=[np.complex64]\n        )\n        self.noise_voltage = float(noise_voltage)\n        self.last_noise_voltage = float(noise_voltage)\n        self.snr_db = float(snr_db)\n        self.last_snr_db = float(snr_db)\n        self.freq_offset_hz = 0.0\n        self.last_freq_offset_hz = 0.0\n        self.sample_rate = max(1.0, float(sample_rate))\n        self.phase_inc = 0.0\n        self.phase = 0.0\n        self.poll_interval = float(poll_interval)\n        self._last_poll = 0.0\n\n    def _update_from_file(self):\n        now = time.monotonic()\n        if now - self._last_poll < self.poll_interval:\n            return\n\n        self._last_poll = now\n\n        try:\n            with open(CONTROL_FILE) as f:\n                for line in f:\n                    if line.startswith(\"snr=\"):\n                        snr_value = float(line.split(\"=\", 1)[1].strip())\n                        if snr_value != self.last_snr_db:\n                            self.snr_db = snr_value\n                            self.last_snr_db = snr_value\n                    elif line.startswith(\"noise=\"):\n                        noise_value = float(line.split(\"=\", 1)[1].strip())\n                        if noise_value != self.last_noise_voltage:\n                            self.noise_voltage = noise_value\n                            self.last_noise_voltage = noise_value\n                    elif line.startswith(\"freq_offset=\"):\n                        freq_offset = float(line.split(\"=\", 1)[1].strip())\n                        if freq_offset != self.last_freq_offset_hz:\n                            self.freq_offset_hz = freq_offset\n                            self.last_freq_offset_hz = freq_offset\n                            self.phase_inc = (2.0 * np.pi * self.freq_offset_hz) / self.sample_rate\n        except Exception:\n            pass\n\n    def work(self, input_items, output_items):\n        self._update_from_file()\n\n        in0 = input_items[0]\n        out = output_items[0]\n        n = len(in0)\n\n        if n == 0:\n            return 0\n\n        if self.phase_inc != 0.0:\n            phases = self.phase + self.phase_inc * np.arange(n, dtype=np.float32)\n            rot = np.exp(1j * phases).astype(np.complex64)\n            sig = in0 * rot\n            self.phase = float((phases[-1] + self.phase_inc) % (2.0 * np.pi))\n        else:\n            sig = in0\n\n        sigma_snr = 0.0\n        if self.snr_db < 80.0:\n            sig_power = float(np.mean(np.abs(sig) ** 2)) if n > 0 else 0.0\n            if sig_power > 0.0:\n                snr_linear = 10.0 ** (self.snr_db / 10.0)\n                if snr_linear > 0.0:\n                    noise_power = sig_power / snr_linear\n                    sigma_snr = float(np.sqrt(noise_power / 2.0))\n\n        sigma_noise = max(0.0, float(self.noise_voltage)) / np.sqrt(2.0)\n        sigma = float(np.sqrt((sigma_snr ** 2) + (sigma_noise ** 2)))\n\n        if sigma <= 0.0:\n            out[:] = sig\n            return len(out)\n        \n        noise_real = np.random.normal(0.0, sigma, len(in0)).astype(np.float32)\n        noise_imag = np.random.normal(0.0, sigma, len(in0)).astype(np.float32)\n\n        out[:] = sig + noise_real + 1j * noise_imag\n        return len(out)"
     affinity: ''
     alias: ''
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
     noise_voltage: '0.0'
+    snr_db: '30.0'
     poll_interval: '0.2'
+    sample_rate: samp_rate
   states:
-    _io_cache: ('SNMP Noise Control', 'blk', [('noise_voltage', '0.0'), ('poll_interval',
-      '0.2')], [('0', 'complex', 1)], [('0', 'complex', 1)], 'Adds controllable complex
-      Gaussian noise to a complex stream', ['noise_voltage', 'poll_interval'])
+    _io_cache: ('SNMP Noise Control', 'blk', [('noise_voltage', '0.0'), ('snr_db',
+      '30.0'), ('poll_interval', '0.2'), ('sample_rate', 'samp_rate')], [('0', 'complex',
+      1)], [('0', 'complex', 1)], 'Adds AWGN and frequency offset with runtime control
+      from control file.', ['noise_voltage', 'snr_db', 'poll_interval', 'sample_rate'])
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [472, 800.0]
+    coordinate: [1648, 744.0]
     rotation: 0
     state: enabled
 - name: import_0
@@ -568,7 +495,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1184, 824.0]
+    coordinate: [2000, 856.0]
     rotation: 0
     state: enabled
 - name: zeromq_pub_msg_sink_0
@@ -600,7 +527,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2040, 48.0]
+    coordinate: [2400, 48.0]
     rotation: 0
     state: enabled
 

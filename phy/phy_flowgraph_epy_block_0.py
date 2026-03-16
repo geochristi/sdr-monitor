@@ -10,7 +10,10 @@ import numpy as np
 from gnuradio import gr
 import pmt
 import json
-from time import time
+from time import time, sleep
+import threading
+
+CONTROL_FILE = "/home/georgia/Desktop/SDR/control/phy_control.txt"
 
 class blk(gr.sync_block):  # other base classes are basic_block, decim_block, interp_block
     """Packet Generator Block - generates PDUs with random bytes"""
@@ -30,8 +33,21 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
         self.message_port_register_out(pmt.intern('metrics')) # telemetry
        
         self.packet_id = 0
+        self.running = True
+        self.sender_thread = threading.Thread(target=self.run_sender, daemon=True)
+        self.sender_thread.start()
 
-    def handle_msg(self, msg):
+    def read_packet_rate(self):
+        try:
+            with open(CONTROL_FILE, "r") as f:
+                for line in f:
+                    if line.startswith("rate="):
+                        return max(0, int(line.strip().split("=", 1)[1]))
+        except Exception:
+            pass
+        return 0
+
+    def send_packet(self):
         length = 256
 
         data = np.random.randint(0, 256, length, dtype=np.uint8)
@@ -48,7 +64,21 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
         #publish telemetry
         # self.publish_metrics()
 
+    def run_sender(self):
+        while self.running:
+            rate = self.read_packet_rate()
+            if rate > 0:
+                self.send_packet()
+                sleep(1.0 / rate)
+            else:
+                sleep(0.2)
 
+    def handle_msg(self, msg):
+        self.send_packet()
+
+    def stop(self):
+        self.running = False
+        return True
 
     def publish_metrics(self):
         metrics = {

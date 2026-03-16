@@ -20,7 +20,7 @@ and prints both current metrics and active alarms.
 ## Files
 
 - `main.py`: control loop entrypoint.
-- `phy_control.txt`: control-plane state file (currently stores `noise=<value>` for SNMP set path).
+- `phy_control.txt`: control-plane state file used by runtime knobs.
 - `adaptive_logic.py`: placeholder for closed-loop adaptation logic.
 - `scheduler.py`: placeholder for scheduling policy logic.
 
@@ -70,3 +70,14 @@ You should see lines similar to:
 
 - Subscriber receive timeout defaults to 1 second (`RCVTIMEO=1000` in `transport/zmq_sub.py`).
 - If no message arrives, loop continues without updating metrics for that cycle.
+
+## Control File Keys
+
+`phy_control.txt` currently uses:
+
+- `noise=<float>`: explicit additive noise voltage.
+- `snr=<float>`: target SNR in dB for AWGN generation.
+- `ber_inject=<float>`: BER injection probability in `[0.0, 1.0]` used by comparator.
+- `rate=<int>`: packet generation rate.
+- `freq_offset=<int>`: frequency offset in Hz.
+- `mod_scheme=<int>`: modulation profile (`0..4`).

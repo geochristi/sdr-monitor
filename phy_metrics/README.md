@@ -64,6 +64,15 @@ print(alarms)
 
 This module is used by `control/main.py`, which receives telemetry via `transport/zmq_sub.py` and feeds each message into `PhyMetricsEngine`.
 
+## BER Injection Note
+
+The BER comparator block (`phy/phy_flowgraph_epy_block_1.py`) supports runtime BER injection
+through `ber_inject` in `control/phy_control.txt`.
+
+When enabled, the comparator intentionally introduces controlled symbol mismatches before
+computing and publishing BER metrics. `PhyMetricsEngine` then processes those updated
+`bits/errors/ber` values like normal telemetry.
+
 ## BER / Counter Reset Behavior (Important)
 
 `PhyMetricsEngine` processes incoming telemetry and typically receives cumulative

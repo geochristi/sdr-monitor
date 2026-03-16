@@ -6,7 +6,7 @@ It combines a GNU Radio PHY simulation with a small management plane so you can:
 - publish PHY telemetry (SNR, BER, RSSI, etc.),
 - process and alarm on metrics in Python,
 - expose selected PHY values through SNMP,
-- change PHY noise through `snmpset` for closed-loop experiments,
+- change PHY impairments through `snmpset` for closed-loop experiments,
 - reset effective BER counters via SNMP.
 
 ## What This Project Is
@@ -17,7 +17,7 @@ The current working path is:
 1. GNU Radio PHY produces runtime statistics.
 2. Telemetry is published over ZeroMQ (`tcp://127.0.0.1:5556`).
 3. A Python control loop consumes telemetry and computes alarms.
-4. SNMP `pass_persist` exposes PHY OIDs for GET/GETNEXT and allows SET on noise and BER reset.
+4. SNMP `pass_persist` exposes PHY OIDs for GET/GETNEXT and allows SET on impairments/control knobs.
 
 ## Repository Layout
 
@@ -36,7 +36,12 @@ The current working path is:
   - Metric subscription and processing (`python -m control.main`)
   - SNMP walk/getnext/get
   - SNMP set for:
-    - noise (`phyNoise.0`)
+    - noise voltage (`phyNoise.0`)
+    - target SNR (`phySNR.0`)
+    - BER injection probability (`phyBERInject.0`)
+    - packet rate (`phyPacketRate.0`)
+    - frequency offset (`phyFreqOffset.0`)
+    - modulation scheme (`phyModScheme.0`)
     - effective BER baseline reset (`phyResetBER.0`, write `1`)
 - In progress/placeholders:
   - `management/netconf_server.py`
@@ -104,10 +109,22 @@ Walk PHY subtree:
 snmpwalk -v2c -c public localhost .1.3.6.1.4.1.53864
 ```
 
-Set PHY noise (integer scaled by 10):
+Set PHY noise voltage (integer scaled by 10):
 
 ```bash
 snmpset -v2c -c private localhost .1.3.6.1.4.1.53864.1.1.0 i 5
+```
+
+Set target SNR in dB (integer scaled by 10):
+
+```bash
+snmpset -v2c -c private localhost .1.3.6.1.4.1.53864.1.9.0 i 250
+```
+
+Set BER injection probability (integer scaled by 1e6):
+
+```bash
+snmpset -v2c -c private localhost .1.3.6.1.4.1.53864.1.10.0 i 10000
 ```
 
 Reset effective BER counters baseline:
@@ -124,11 +141,16 @@ snmpget -v2c -c public localhost .1.3.6.1.4.1.53864.1.5.0
 
 ## OID Map
 
-- `.1.3.6.1.4.1.53864.1.1.0` → `phyNoise.0` (read/write, scaled integer)
+- `.1.3.6.1.4.1.53864.1.1.0` → `phyNoise.0` (read/write, scaled by 10)
 - `.1.3.6.1.4.1.53864.1.2.0` → `phyBits.0` (read-only, effective bits)
 - `.1.3.6.1.4.1.53864.1.3.0` → `phyErrors.0` (read-only, effective errors)
 - `.1.3.6.1.4.1.53864.1.4.0` → `phyBER.0` (read-only string)
 - `.1.3.6.1.4.1.53864.1.5.0` → `phyResetBER.0` (read/write; write `1` resets baseline, read returns `0`)
+- `.1.3.6.1.4.1.53864.1.6.0` → `phyPacketRate.0` (read/write integer)
+- `.1.3.6.1.4.1.53864.1.7.0` → `phyFreqOffset.0` (read/write integer Hz)
+- `.1.3.6.1.4.1.53864.1.8.0` → `phyModScheme.0` (read/write enum: 0 BPSK, 1 QPSK, 2 8PSK, 3 16QAM, 4 64QAM)
+- `.1.3.6.1.4.1.53864.1.9.0` → `phySNR.0` (read/write, scaled by 10)
+- `.1.3.6.1.4.1.53864.1.10.0` → `phyBERInject.0` (read/write, scaled by 1e6)
 
 ## Key Files
 
@@ -143,5 +165,5 @@ snmpget -v2c -c public localhost .1.3.6.1.4.1.53864.1.5.0
 - SNMP config binds to localhost for local testing.
 - SNMP values are sourced from live ZMQ telemetry through `transport/zmq_sub.py`.
 - BER reset is baseline-based in SNMP view (effective counters), because upstream telemetry counters are cumulative.
-- Noise control state is stored in:
+- Runtime control state is stored in:
   - `/home/georgia/Desktop/SDR/control/phy_control.txt`

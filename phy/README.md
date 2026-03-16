@@ -28,13 +28,12 @@ In GRC:
 
 ```bash
 cd ~/Desktop/SDR/phy
-python3 phy_flowgraph.py
+python3 run_phy.py
 ```
 
 Notes:
 
-- The script runs until you press `Enter` in the terminal.
-- BER totals are written to `/tmp/phy_stats.txt` by `phy_flowgraph_epy_block_1.py`.
+- The script runs until closed with Ctrl+C.
 - ZMQ publishers in the flowgraph publish on:
 	- `tcp://127.0.0.1:5555`
 	- `tcp://127.0.0.1:5556`
@@ -79,16 +78,27 @@ For this project, the SNMP/monitor subscriber is expected to read telemetry from
 
 If you change the endpoint in GNU Radio, update the subscriber config too, otherwise metrics and BER/reset behavior in SNMP will appear broken.
 
-## Noise control file used by PHY block
+## Control file used by PHY blocks
 
-The Embedded Python noise-control block reads:
+The Embedded Python blocks read:
 
 - `/home/georgia/Desktop/SDR/control/phy_control.txt`
 
 Format:
 
 ```txt
-noise=0.1
+noise=0.0
+snr=30.0
+ber_inject=0.0
+rate=50
+freq_offset=0
+mod_scheme=3
 ```
 
-SNMP `set` on `phyNoise.0` should update this file, and the PHY block applies it during runtime.
+Runtime meaning:
+
+- `noise`: explicit additive noise voltage.
+- `snr`: target SNR-based AWGN level (dB).
+- `ber_inject`: probability of injected symbol mismatch in BER comparator.
+
+SNMP `set` updates this file and the flowgraph applies changes during runtime.

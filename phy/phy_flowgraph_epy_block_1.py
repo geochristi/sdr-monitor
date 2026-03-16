@@ -12,6 +12,9 @@ from time import time
 import numpy as np
 from gnuradio import gr
 import pmt
+
+CONTROL_FILE = "/home/georgia/Desktop/SDR/control/phy_control.txt"
+
 # BER comparator
 class blk(gr.sync_block):  # other base classes are basic_block, decim_block, interp_block
     """Compare TX/RX byte streams and publish BER metrics."""
@@ -37,11 +40,33 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
         self.window_errors = 0
         self.WINDOW_SIZE = 1000
 
+        # Controlled BER injection (0.0 .. 1.0 probability per compared symbol).
+        self.ber_inject = 0.0
+        self._last_poll = 0.0
+        self.poll_interval = 0.2
+
+    def _update_ber_inject_from_file(self):
+        now = time()
+        if now - self._last_poll < self.poll_interval:
+            return
+
+        self._last_poll = now
+        try:
+            with open(CONTROL_FILE, "r") as f:
+                for line in f:
+                    if line.startswith("ber_inject="):
+                        value = float(line.split("=", 1)[1].strip())
+                        self.ber_inject = max(0.0, min(value, 1.0))
+                        break
+        except Exception:
+            pass
+
 
     def work(self, input_items, output_items):
         # Receive synchronized TX/RX streams.
         tx = input_items[0]
         rx = input_items[1]
+        self._update_ber_inject_from_file()
         # print("TX:", tx[:10])
         # print("RX:", rx[:10])
         n = min(len(tx), len(rx))
@@ -53,7 +78,15 @@ class blk(gr.sync_block):  # other base classes are basic_block, decim_block, in
         # Compare only the common region if buffers differ in length.
         tx_view = tx[:n]
         rx_view = rx[:n]
-        bit_errors = int(np.sum(tx_view != rx_view))
+
+        if self.ber_inject > 0.0:
+            rx_eval = rx_view.copy()
+            inject_mask = np.random.random(n) < self.ber_inject
+            rx_eval[inject_mask] = np.bitwise_xor(rx_eval[inject_mask], np.uint8(1))
+        else:
+            rx_eval = rx_view
+
+        bit_errors = int(np.sum(tx_view != rx_eval))
 
         # Update running totals.
         self.total_bits += n
