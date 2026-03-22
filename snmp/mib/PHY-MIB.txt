@@ -5,10 +5,12 @@ IMPORTS
     OBJECT-TYPE,
     Integer32,
     enterprises
-        FROM SNMPv2-SMI;
+        FROM SNMPv2-SMI
+    DisplayString
+        FROM SNMPv2-TC;
 
 phy MODULE-IDENTITY
-    LAST-UPDATED "202603150000Z"
+    LAST-UPDATED "202603170000Z"
     ORGANIZATION "SDR PHY Thesis"
     CONTACT-INFO "Georgia Christi"
     DESCRIPTION
@@ -23,13 +25,20 @@ phyObjects OBJECT IDENTIFIER ::= { phy 1 }
 -- phyErrors   = .1.3.6.1.4.1.53864.1.3.0
 -- phyBER      = .1.3.6.1.4.1.53864.1.4.0
 -- phyResetBER = .1.3.6.1.4.1.53864.1.5.0
+-- phyPacketRate = .1.3.6.1.4.1.53864.1.6.0
+-- phyFreqOffset = .1.3.6.1.4.1.53864.1.7.0
+-- phyModScheme = .1.3.6.1.4.1.53864.1.8.0
+-- phySNR      = .1.3.6.1.4.1.53864.1.9.0
+-- phyBERInject = .1.3.6.1.4.1.53864.1.10.0
 
 phyNoise OBJECT-TYPE
     SYNTAX      Integer32
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
-        "Channel noise level (scalar instance .1.3.6.1.4.1.53864.1.1.0)."
+        "Explicit additive noise voltage, scaled by 10.
+         Example: value 5 means noise=0.5.
+         (scalar instance .1.3.6.1.4.1.53864.1.1.0)."
     ::= { phyObjects 1 }
 
 phyBits OBJECT-TYPE
@@ -65,5 +74,53 @@ phyResetBER OBJECT-TYPE
          Always returns 0 on read.
          (scalar instance .1.3.6.1.4.1.53864.1.5.0)."
     ::= { phyObjects 5 }
+
+phyPacketRate OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Packet generation rate (packets/sec).
+         (scalar instance .1.3.6.1.4.1.53864.1.6.0)."
+    ::= { phyObjects 6 }
+
+phyFreqOffset OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Frequency offset in Hz.
+         (scalar instance .1.3.6.1.4.1.53864.1.7.0)."
+    ::= { phyObjects 7 }
+
+phyModScheme OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Modulation scheme selector:
+         0=BPSK, 1=QPSK, 2=8PSK, 3=16QAM, 4=64QAM.
+         (scalar instance .1.3.6.1.4.1.53864.1.8.0)."
+    ::= { phyObjects 8 }
+
+phySNR OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Target channel SNR in dB, scaled by 10.
+         Example: value 250 means 25.0 dB.
+         (scalar instance .1.3.6.1.4.1.53864.1.9.0)."
+    ::= { phyObjects 9 }
+
+phyBERInject OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "BER injection probability scaled by 1,000,000.
+         Example: value 10000 means 0.01 (1%).
+         (scalar instance .1.3.6.1.4.1.53864.1.10.0)."
+    ::= { phyObjects 10 }
 
 END

@@ -10,9 +10,11 @@ except ImportError:
 
 from transport.zmq_sub import ZMQSubscriber
 from phy_metrics.metrics_engine import PhyMetricsEngine
+from control.controller import Controller
 
 subscriber = ZMQSubscriber()
 engine = PhyMetricsEngine()
+controller = Controller()
 
 CONTROL_FILE = "/home/georgia/Desktop/SDR/control/phy_control.txt"
 noise_value = 0.0
@@ -26,14 +28,17 @@ reset_errors_base = 0
 
 # Ensure control file exists with default values
 if not os.path.exists(CONTROL_FILE):
+    write_defaults = {
+        "noise": 0.0,
+        "snr": 30.0,
+        "rate": 0,
+        "freq_offset": 0,
+        "mod_scheme": 3,
+        "ber_inject": 0.0,
+    }
     try:
-        with open(CONTROL_FILE, "w") as f:
-            f.write("noise=0.0\n")
-            f.write("snr=30.0\n")
-            f.write("rate=0\n")
-            f.write("freq_offset=0\n")
-            f.write("mod_scheme=3\n")
-            f.write("ber_inject=0.0\n")
+        for key, value in write_defaults.items():
+            controller.upsert_control_param(key, value, source="snmp-init")
     except Exception:
         pass
 
@@ -62,11 +67,8 @@ def read_control_values():
     return values
 
 def write_control_values(values):
-    current = read_control_values()
-    current.update(values)
-    with open(CONTROL_FILE, "w") as f:
-        for key, value in current.items():
-            f.write(f"{key}={value}\n")
+    for key, value in values.items():
+        controller.upsert_control_param(key, value, source="snmp")
 
 def read_noise():
     global noise_value

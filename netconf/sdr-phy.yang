@@ -1,0 +1,46 @@
+module sdr-phy {
+  namespace "urn:sdr:phy";
+  prefix sdr;
+
+  container phy {
+
+    leaf frequency {
+      type decimal64 {
+        fraction-digits 2;
+      }
+      default 2400000000;
+      description "Carrier frequency in Hz";
+    }
+
+    leaf tx_gain {
+      type decimal64 {
+        fraction-digits 2;
+      }
+      default 10;
+    }
+
+    leaf rx_gain {
+      type decimal64 {
+        fraction-digits 2;
+      }
+      default 10;
+    }
+
+    leaf modulation {
+      type string;
+      default "BPSK";
+    }
+
+    leaf packet_rate {
+      type uint32;
+      default 100;
+    }
+
+    leaf noise_level {
+      type decimal64 {
+        fraction-digits 4;
+      }
+      default 0;
+    }
+  }
+}

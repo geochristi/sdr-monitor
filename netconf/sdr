@@ -1,0 +1,29 @@
+#!/bin/bash
+
+CMD=$1
+PARAM=$2
+VALUE=$3
+
+TMPFILE=/tmp/sdr_tmp.json
+
+if [ "$CMD" = "set" ]; then
+    cat > $TMPFILE <<EOF
+{
+  "sdr-phy:phy": {
+    "$PARAM": "$VALUE"
+  }
+}
+EOF
+
+    sysrepocfg --import=$TMPFILE -d running -m sdr-phy -f json
+
+elif [ "$CMD" = "show" ]; then
+    sysrepocfg -X -d running -m sdr-phy
+
+else
+    echo "Usage:"
+    echo "./sdr set tx_gain 40"
+    echo "./sdr set noise_level 0.01"
+    echo "./sdr set frequency 2450000000"
+    echo "./sdr show"
+fi
