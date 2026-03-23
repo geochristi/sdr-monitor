@@ -17,7 +17,7 @@ Container: `phy`
 
 | Leaf | Type | Default | Description |
 |---|---|---|---|
-| `frequency` | decimal64 | 2400000000 | Carrier frequency in Hz → written as `freq_offset` |
+| `frequency` | decimal64 | 2400000000 | Carrier frequency in Hz → converted to `freq_offset` in Hz relative to 2.4 GHz |
 | `modulation` | string | BPSK | Modulation scheme string → mapped to `mod_scheme` (0–4) |
 | `packet_rate` | uint32 | 100 | Packet rate in pps → written as `rate` |
 | `noise_level` | decimal64 | 0 | Noise amplitude → written as `noise` |
@@ -87,8 +87,13 @@ Example `config.json`:
 After a successful import the controller prints:
 
 ```
-WROTE freq_offset=2450000000.000000 to control file
+WROTE freq_offset=1000000 to control file
 WROTE mod_scheme=3 to control file
 WROTE rate=200 to control file
 WROTE noise=0.100000 to control file
 ```
+
+`frequency` mapping details:
+
+- `freq_offset = round(frequency_hz - 2400000000)`
+- clamped to `[-1000000, 1000000]` to match controller bounds

@@ -4,12 +4,12 @@ module sdr-phy {
 
   container phy {
 
-    leaf frequency {
-      type decimal64 {
-        fraction-digits 2;
+    leaf frequency_offset {
+      type int32 {
+        range "-1000000..1000000";
       }
-      default 2400000000;
-      description "Carrier frequency in Hz";
+      default 0;
+      description "Frequency offset in Hz";
     }
 
     leaf tx_gain {
@@ -26,9 +26,11 @@ module sdr-phy {
       default 10;
     }
 
-    leaf modulation {
-      type string;
-      default "BPSK";
+    leaf mod_scheme {
+      type uint32 {
+        range "0..4";
+      }
+      default 3;
     }
 
     leaf packet_rate {
@@ -41,6 +43,22 @@ module sdr-phy {
         fraction-digits 4;
       }
       default 0;
+    }
+
+    leaf snr {
+      type decimal64 {
+        fraction-digits 2;
+      }
+      default 30;
+      description "Target SNR in dB";
+    }
+
+    leaf ber_inject {
+      type decimal64 {
+        fraction-digits 6;
+      }
+      default 0;
+      description "BER injection probability in [0,1]";
     }
   }
 }

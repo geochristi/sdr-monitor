@@ -15,8 +15,6 @@ from control.controller import Controller
 subscriber = ZMQSubscriber()
 engine = PhyMetricsEngine()
 controller = Controller()
-
-CONTROL_FILE = "/home/georgia/Desktop/SDR/control/phy_control.txt"
 noise_value = 0.0
 snr_value = 30.0
 rate_value = 0
@@ -26,21 +24,10 @@ ber_inject_value = 0.0
 reset_bits_base = 0
 reset_errors_base = 0
 
-# Ensure control file exists with default values
-if not os.path.exists(CONTROL_FILE):
-    write_defaults = {
-        "noise": 0.0,
-        "snr": 30.0,
-        "rate": 0,
-        "freq_offset": 0,
-        "mod_scheme": 3,
-        "ber_inject": 0.0,
-    }
-    try:
-        for key, value in write_defaults.items():
-            controller.upsert_control_param(key, value, source="snmp-init")
-    except Exception:
-        pass
+try:
+    controller.ensure_control_file()
+except Exception:
+    pass
 
 # NOTE: Avoid printing to stdout. pass_persist uses stdout for the SNMP protocol.
 # Debug messages must go to stderr or a log file.
@@ -54,17 +41,10 @@ def update_metrics():
         engine.update(data)
 
 def read_control_values():
-    values = {}
     try:
-        with open(CONTROL_FILE) as f:
-            for line in f:
-                if "=" not in line:
-                    continue
-                k, v = line.strip().split("=", 1)
-                values[k] = v
+        return controller.get_all_params(refresh=True)
     except Exception:
-        pass
-    return values
+        return {}
 
 def write_control_values(values):
     for key, value in values.items():

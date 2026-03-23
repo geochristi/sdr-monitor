@@ -16,6 +16,11 @@
 
 #define CONTROL_FILE "/home/georgia/Desktop/SDR/control/phy_control.txt"
 #define FALLBACK_CONTROL_FILE "/home/georgia/Desktop/SDR/phy_cotrol.txt"
+#define CONTROL_FILE_MODE 0664
+#define LOCK_FILE_MODE 0666
+#define NOMINAL_CENTER_FREQUENCY_HZ 2400000000.0
+#define FREQ_OFFSET_MIN_HZ (-1000000)
+#define FREQ_OFFSET_MAX_HZ (1000000)
 
 static const char *canonical_key_from_leaf(const char *leaf)
 {
@@ -29,10 +34,7 @@ static const char *canonical_key_from_leaf(const char *leaf)
     if (strcmp(leaf, "noise_level") == 0) {
         return "noise";
     }
-    if (strcmp(leaf, "modulation") == 0) {
-        return "mod_scheme";
-    }
-    if (strcmp(leaf, "frequency") == 0) {
+    if (strcmp(leaf, "frequency_offset") == 0) {
         return "freq_offset";
     }
 
@@ -123,6 +125,39 @@ static int map_modulation_to_scheme(const char *raw, char *out, size_t out_sz)
     return -1;
 }
 
+static int map_frequency_to_offset_hz(const char *raw_hz, char *out, size_t out_sz)
+{
+    char *end = NULL;
+    double absolute_hz;
+    double offset_hz;
+    long long offset_i;
+
+    if (!raw_hz || !out || out_sz == 0) {
+        return -1;
+    }
+
+    errno = 0;
+    absolute_hz = strtod(raw_hz, &end);
+    if (errno != 0 || end == raw_hz) {
+        return -1;
+    }
+
+    offset_hz = absolute_hz - NOMINAL_CENTER_FREQUENCY_HZ;
+
+    if (offset_hz > (double)FREQ_OFFSET_MAX_HZ) {
+        offset_hz = (double)FREQ_OFFSET_MAX_HZ;
+    } else if (offset_hz < (double)FREQ_OFFSET_MIN_HZ) {
+        offset_hz = (double)FREQ_OFFSET_MIN_HZ;
+    }
+
+    if (offset_hz >= 0.0) {
+        offset_i = (long long)(offset_hz + 0.5);
+    } else {
+        offset_i = (long long)(offset_hz - 0.5);
+    }
+    return snprintf(out, out_sz, "%lld", offset_i) >= 0 ? 0 : -1;
+}
+
 static int key_matches_line(const char *line, const char *key)
 {
     const char *eq;
@@ -186,7 +221,7 @@ static int upsert_key_value_atomic(const char *path, const char *key, const char
         }
         fclose(in);
         in = NULL;
-    } else if (errno != ENOENT) {
+    } else if (errno != ENOENT && errno != EACCES) {
         goto cleanup;
     }
 
@@ -203,6 +238,8 @@ static int upsert_key_value_atomic(const char *path, const char *key, const char
         unlink(tmp_template);
         goto cleanup;
     }
+
+    (void)chmod(path, CONTROL_FILE_MODE);
 
     ret = 0;
 
@@ -232,13 +269,15 @@ static int write_control_param(const char *key, const char *value)
         return -1;
     }
 
-    lock_fd = open(lock_path, O_CREAT | O_RDWR, 0644);
+    lock_fd = open(lock_path, O_CREAT | O_RDWR, LOCK_FILE_MODE);
     if (lock_fd < 0) {
-        lock_fd = open(fallback_lock_path, O_CREAT | O_RDWR, 0644);
+        lock_fd = open(fallback_lock_path, O_CREAT | O_RDWR, LOCK_FILE_MODE);
         if (lock_fd < 0) {
             return -1;
         }
     }
+
+    (void)fchmod(lock_fd, LOCK_FILE_MODE);
 
     if (flock(lock_fd, LOCK_EX) != 0) {
         close(lock_fd);
@@ -313,12 +352,6 @@ static int module_change_cb(sr_session_ctx_t *session,
             }
 
             if (key && format_sr_value(new_val, value_buf, sizeof(value_buf)) == 0) {
-                if (strcmp(key, "mod_scheme") == 0) {
-                    char mapped_scheme[32];
-                    if (map_modulation_to_scheme(value_buf, mapped_scheme, sizeof(mapped_scheme)) == 0) {
-                        snprintf(value_buf, sizeof(value_buf), "%s", mapped_scheme);
-                    }
-                }
                 if (write_control_param(key, value_buf) != 0) {
                     fprintf(stderr, "Failed to write %s=%s to control file\n", key, value_buf);
                 } else {
