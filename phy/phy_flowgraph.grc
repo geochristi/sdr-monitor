@@ -604,7 +604,7 @@ blocks:
 - name: zeromq_pub_msg_sink_0
   id: zeromq_pub_msg_sink
   parameters:
-    address: tcp://127.0.0.1:5555
+    address: tcp://127.0.0.1:9555
     affinity: ''
     alias: ''
     bind: 'True'
@@ -617,13 +617,13 @@ blocks:
     coordinate: [512, 432.0]
     rotation: 0
     state: enabled
-- name: zeromq_pub_msg_sink_0_0
-  id: zeromq_pub_msg_sink
+- name: zeromq_push_msg_sink_0_0
+  id: zeromq_push_msg_sink
   parameters:
-    address: tcp://127.0.0.1:5556
+    address: tcp://127.0.0.1:5558
     affinity: ''
     alias: ''
-    bind: 'True'
+    bind: 'False'
     comment: ''
     timeout: '100'
   states:
@@ -649,7 +649,7 @@ connections:
 - [digital_diff_encoder_bb_0, '0', blocks_selector_1, '0']
 - [epy_block_0, out, pdu_pdu_to_tagged_stream_0, pdus]
 - [epy_block_0, out, zeromq_pub_msg_sink_0, in]
-- [epy_block_1, metrics, zeromq_pub_msg_sink_0_0, in]
+- [epy_block_1, metrics, zeromq_push_msg_sink_0_0, in]
 - [epy_block_3, '0', digital_constellation_decoder_cb_0, '0']
 - [epy_block_3, '0', qtgui_const_sink_x_0, '0']
 - [pdu_pdu_to_tagged_stream_0, '0', blocks_repack_bits_bb_0, '0']

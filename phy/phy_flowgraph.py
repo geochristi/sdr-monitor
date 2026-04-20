@@ -76,8 +76,8 @@ class phy_flowgraph(gr.top_block, Qt.QWidget):
         # Blocks
         ##################################################
 
-        self.zeromq_pub_msg_sink_0_0 = zeromq.pub_msg_sink('tcp://127.0.0.1:5556', 100, True)
-        self.zeromq_pub_msg_sink_0 = zeromq.pub_msg_sink('tcp://127.0.0.1:5555', 100, True)
+        self.zeromq_push_msg_sink_0_0 = zeromq.push_msg_sink('tcp://127.0.0.1:5558', 100, False)
+        self.zeromq_pub_msg_sink_0 = zeromq.pub_msg_sink('tcp://127.0.0.1:9555', 100, True)
         self.qtgui_const_sink_x_0 = qtgui.const_sink_c(
             1024, #size
             "", #name
@@ -142,7 +142,7 @@ class phy_flowgraph(gr.top_block, Qt.QWidget):
         self.msg_connect((self.blocks_message_strobe_0, 'strobe'), (self.epy_block_0, 'trigger'))
         self.msg_connect((self.epy_block_0, 'out'), (self.pdu_pdu_to_tagged_stream_0, 'pdus'))
         self.msg_connect((self.epy_block_0, 'out'), (self.zeromq_pub_msg_sink_0, 'in'))
-        self.msg_connect((self.epy_block_1, 'metrics'), (self.zeromq_pub_msg_sink_0_0, 'in'))
+        self.msg_connect((self.epy_block_1, 'metrics'), (self.zeromq_push_msg_sink_0_0, 'in'))
         self.connect((self.blocks_repack_bits_bb_0, 0), (self.blocks_selector_1, 1))
         self.connect((self.blocks_repack_bits_bb_0, 0), (self.digital_diff_encoder_bb_0, 0))
         self.connect((self.blocks_repack_bits_bb_0, 0), (self.epy_block_1, 0))
