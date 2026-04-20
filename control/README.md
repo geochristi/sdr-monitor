@@ -20,7 +20,7 @@ and prints both current metrics and active alarms.
 ## Files
 
 - `main.py`: control loop entrypoint.
-- `phy_control.txt`: control-plane state file used by runtime knobs.
+- `phy_control.txt`: legacy fallback control-state file for non-ZMQ paths.
 - `adaptive_logic.py`: placeholder for closed-loop adaptation logic.
 - `scheduler.py`: placeholder for scheduling policy logic.
 
@@ -73,7 +73,7 @@ You should see lines similar to:
 
 ## Control File Keys
 
-`phy_control.txt` currently uses:
+`phy_control.txt` is only used by legacy or fallback control paths and currently uses:
 
 - `noise=<float>`: explicit additive noise voltage.
 - `snr=<float>`: target SNR in dB for AWGN generation.

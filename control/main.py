@@ -1,23 +1,23 @@
 import time
-import json
 from transport.zmq_sub import ZMQSubscriber
 from phy_metrics.metrics_engine import PhyMetricsEngine
 
-# Subscribes to PHY telemetry, feeds it into the metrics engine, prints metrics/alarms, and loops continuously with a short sleep.
+
+"""Live metrics monitor that consumes controller-republished PHY telemetry."""
 
 def main():
     subscriber = ZMQSubscriber()
     engine = PhyMetricsEngine()
 
-    print("Starting main loop to receive PHY metrics...")
+    print("Starting metrics monitor loop...")
 
     while True:
         data = subscriber.receive()
         if data is None:
-            # No telemetry this cycle (timeout)
             continue
+
         alarms = engine.update(data)
-        print ("Received data:", data)
+        print("Received metrics:", data)
         print("ENGINE:", engine.get_all().to_dict())
     
         if alarms:

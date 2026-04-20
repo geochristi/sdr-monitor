@@ -28,12 +28,16 @@ LEGACY_ALIASES = {
 }
 
 class Controller:
-    def __init__(self):
+    def __init__(self, persist=True):
         self.state = dict(DEFAULT_CONTROL_STATE)
         self.lock = threading.Lock()
+        self.persist = persist
 
     def ensure_control_file(self):
         with self.lock:
+            if not self.persist:
+                return
+
             if self._read_state_from_disk_locked() is not None:
                 return
 
@@ -50,25 +54,27 @@ class Controller:
             normalized_value = self._normalize_value(canonical_name, value)
             self.state[canonical_name] = normalized_value
             print(f"Parameter '{name}' set to {value} by {source}")
-            self._write_to_file(canonical_name, normalized_value, source, emit_warning=True)
+            if self.persist:
+                self._write_to_file(canonical_name, normalized_value, source, emit_warning=True)
 
     def upsert_control_param(self, name, value, source="unknown"):
         with self.lock:
             canonical_name = self._canonical_name(name)
             normalized_value = self._normalize_value(canonical_name, value)
             self.state[canonical_name] = normalized_value
-            self._write_to_file(canonical_name, normalized_value, source, emit_warning=False)
+            if self.persist:
+                self._write_to_file(canonical_name, normalized_value, source, emit_warning=False)
 
     def get_param(self, name, refresh=False):
         with self.lock:
             canonical_name = self._canonical_name(name)
-            if refresh:
+            if refresh and self.persist:
                 self._refresh_state_from_disk_locked()
             return self.state.get(canonical_name, None)
 
     def get_all_params(self, refresh=False):
         with self.lock:
-            if refresh:
+            if refresh and self.persist:
                 self._refresh_state_from_disk_locked()
             return dict(self.state)
 
