@@ -3,14 +3,13 @@ import json
 import sys
 
 class ZMQSubscriber:
-    def __init__(self, address="tcp://127.0.0.1:5556"):#metrics port, don't subscribe to the 5555 because we don't actually want to get the packets.. only telemetry
-        
+    def __init__(self, address="tcp://127.0.0.1:5556", topic_prefix="metrics/"):
         self.context = zmq.Context.instance()
         self.socket = self.context.socket(zmq.SUB)
         self.socket.connect(address)
-        self.socket.setsockopt(zmq.SUBSCRIBE, b'')  # Subscribe to all messages"")
+        self.socket.setsockopt(zmq.SUBSCRIBE, topic_prefix.encode("utf-8"))
         self.socket.RCVTIMEO = 1000  # 1 second timeout
-        # print("Subscriber connected to", address, file=sys.stderr)        
+        self.topic_prefix = topic_prefix
 
     def receive(self, timeout=None):
         original_timeout = self.socket.RCVTIMEO
@@ -18,25 +17,18 @@ class ZMQSubscriber:
             self.socket.RCVTIMEO = int(timeout)
 
         try:
-            raw_message = self.socket.recv()
-            # print("RAW:", raw_message)
-
-            # find beginning of JSON object
-            json_start = raw_message.find(b'{')
-            if json_start == -1:
-                print("No JSON object found in message.")
+            topic, raw_message = self.socket.recv_multipart()
+            decoded = self.deserialize(raw_message)
+            if decoded is None:
                 return None
-            json_bytes = raw_message[json_start:]
-            
-            # here it shows everything 
-            decoded = self.deserialize(json_bytes)
-            #print("RAW Decoded", decoded)
+
+            if isinstance(decoded, dict) and "metrics" in decoded:
+                return decoded["metrics"]
+
             return decoded
         except zmq.Again:
-            #print("No message received within timeout period.")
             return None
-        except Exception as e:
-            #print(f"Failed to receive message: {e}")
+        except Exception:
             return None
         finally:
             if timeout is not None:
@@ -46,11 +38,39 @@ class ZMQSubscriber:
         try:
             return json.loads(raw_message.decode('utf-8'))
         except Exception as e:
-            print(f"Failed to decode JSON message: {e}")
             return None
-        
-    # # if i want struct
-    # def deserialize(self, raw_msg: bytes) -> dict:
-    # import struct
-    # snr, ber, rssi = struct.unpack("fff", raw_msg)
-    # return {"snr": snr, "ber": ber, "rssi": rssi}
+
+
+class ControlUpdateSubscriber:
+    def __init__(self, address="tcp://127.0.0.1:5557", topic_prefix="control/"):
+        self.context = zmq.Context.instance()
+        self.socket = self.context.socket(zmq.SUB)
+        self.socket.connect(address)
+        self.socket.setsockopt(zmq.SUBSCRIBE, topic_prefix.encode("utf-8"))
+        self.socket.RCVTIMEO = 1000
+
+    def receive(self, timeout=None):
+        original_timeout = self.socket.RCVTIMEO
+        if timeout is not None:
+            self.socket.RCVTIMEO = int(timeout)
+
+        try:
+            topic, raw_message = self.socket.recv_multipart()
+            decoded = json.loads(raw_message.decode("utf-8"))
+            if not isinstance(decoded, dict):
+                return None
+            return {
+                "topic": topic.decode("utf-8"),
+                "param": decoded.get("param"),
+                "value": decoded.get("value"),
+            }
+        except zmq.Again:
+            return None
+        except Exception:
+            return None
+        finally:
+            if timeout is not None:
+                self.socket.RCVTIMEO = original_timeout
+
+    def close(self):
+        self.socket.close()
