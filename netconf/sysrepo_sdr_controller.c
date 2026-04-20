@@ -3,24 +3,26 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <limits.h>
 #include <sysrepo.h>
 #include <sysrepo/values.h>
+#include <zmq.h>
+#if __has_include(<cjson/cJSON.h>)
+#include <cjson/cJSON.h>
+#elif __has_include(<cJSON.h>)
+#include <cJSON.h>
+#else
+#error "cJSON header not found. Install libcjson-dev"
+#endif
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
 
-#define CONTROL_FILE "/home/georgia/Desktop/SDR/control/phy_control.txt"
-#define FALLBACK_CONTROL_FILE "/home/georgia/Desktop/SDR/phy_cotrol.txt"
-#define CONTROL_FILE_MODE 0664
-#define LOCK_FILE_MODE 0666
-#define NOMINAL_CENTER_FREQUENCY_HZ 2400000000.0
-#define FREQ_OFFSET_MIN_HZ (-1000000)
-#define FREQ_OFFSET_MAX_HZ (1000000)
+#define ZMQ_CONTROLLER_ADDR "tcp://127.0.0.1:5555"
+#define ZMQ_TIMEOUT_MS 5000
+
+/* ZMQ context (shared across callbacks) */
+static void *zmq_context = NULL;
 
 static const char *canonical_key_from_leaf(const char *leaf)
 {
@@ -100,197 +102,109 @@ static int format_sr_value(const sr_val_t *val, char *out, size_t out_sz)
     }
 }
 
-static int map_modulation_to_scheme(const char *raw, char *out, size_t out_sz)
+/*
+ * Send a single SET_CONFIG message with all changed parameters batched.
+ * config_obj: cJSON object mapping canonical key -> value (number or string).
+ */
+static int zmq_set_config(cJSON *config_obj, const char *source)
 {
-    if (!raw || !out || out_sz == 0) {
+    void *socket = NULL;
+    cJSON *request = NULL;
+    cJSON *response = NULL;
+    char *request_str = NULL;
+    char buffer[4096];
+    int size;
+    int rc = -1;
+
+    if (!zmq_context || !config_obj) {
+        fprintf(stderr, "Invalid arguments to zmq_set_config\n");
         return -1;
     }
 
-    if (strcasecmp(raw, "BPSK") == 0 || strcasecmp(raw, "2PSK") == 0) {
-        return snprintf(out, out_sz, "0") >= 0 ? 0 : -1;
-    }
-    if (strcasecmp(raw, "QPSK") == 0 || strcasecmp(raw, "4PSK") == 0) {
-        return snprintf(out, out_sz, "1") >= 0 ? 0 : -1;
-    }
-    if (strcasecmp(raw, "8PSK") == 0) {
-        return snprintf(out, out_sz, "2") >= 0 ? 0 : -1;
-    }
-    if (strcasecmp(raw, "16QAM") == 0 || strcasecmp(raw, "QAM16") == 0) {
-        return snprintf(out, out_sz, "3") >= 0 ? 0 : -1;
-    }
-    if (strcasecmp(raw, "64QAM") == 0 || strcasecmp(raw, "QAM64") == 0) {
-        return snprintf(out, out_sz, "4") >= 0 ? 0 : -1;
-    }
-
-    return -1;
-}
-
-static int map_frequency_to_offset_hz(const char *raw_hz, char *out, size_t out_sz)
-{
-    char *end = NULL;
-    double absolute_hz;
-    double offset_hz;
-    long long offset_i;
-
-    if (!raw_hz || !out || out_sz == 0) {
+    socket = zmq_socket(zmq_context, ZMQ_REQ);
+    if (!socket) {
+        fprintf(stderr, "Failed to create ZMQ socket: %s\n", zmq_strerror(zmq_errno()));
         return -1;
     }
 
-    errno = 0;
-    absolute_hz = strtod(raw_hz, &end);
-    if (errno != 0 || end == raw_hz) {
+    {
+        int timeout = ZMQ_TIMEOUT_MS;
+        int linger = 0;
+        zmq_setsockopt(socket, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
+        zmq_setsockopt(socket, ZMQ_LINGER, &linger, sizeof(linger));
+    }
+
+    if (zmq_connect(socket, ZMQ_CONTROLLER_ADDR) != 0) {
+        fprintf(stderr, "Failed to connect to ZMQ controller: %s\n", zmq_strerror(zmq_errno()));
+        zmq_close(socket);
         return -1;
     }
 
-    offset_hz = absolute_hz - NOMINAL_CENTER_FREQUENCY_HZ;
-
-    if (offset_hz > (double)FREQ_OFFSET_MAX_HZ) {
-        offset_hz = (double)FREQ_OFFSET_MAX_HZ;
-    } else if (offset_hz < (double)FREQ_OFFSET_MIN_HZ) {
-        offset_hz = (double)FREQ_OFFSET_MIN_HZ;
-    }
-
-    if (offset_hz >= 0.0) {
-        offset_i = (long long)(offset_hz + 0.5);
-    } else {
-        offset_i = (long long)(offset_hz - 0.5);
-    }
-    return snprintf(out, out_sz, "%lld", offset_i) >= 0 ? 0 : -1;
-}
-
-static int key_matches_line(const char *line, const char *key)
-{
-    const char *eq;
-    size_t key_len;
-
-    if (!line || !key) {
-        return 0;
-    }
-
-    eq = strchr(line, '=');
-    if (!eq) {
-        return 0;
-    }
-
-    key_len = (size_t)(eq - line);
-    return strlen(key) == key_len && strncmp(line, key, key_len) == 0;
-}
-
-static int upsert_key_value_atomic(const char *path, const char *key, const char *value)
-{
-    FILE *in = NULL;
-    FILE *out = NULL;
-    char *line = NULL;
-    size_t cap = 0;
-    ssize_t read = 0;
-    int replaced = 0;
-    int ret = -1;
-    char tmp_template[PATH_MAX];
-    int tmp_fd = -1;
-
-    if (snprintf(tmp_template, sizeof(tmp_template), "%s.tmpXXXXXX", path) >= (int)sizeof(tmp_template)) {
+    request = cJSON_CreateObject();
+    if (!request) {
+        fprintf(stderr, "Failed to create JSON request\n");
+        zmq_close(socket);
         return -1;
     }
 
-    tmp_fd = mkstemp(tmp_template);
-    if (tmp_fd < 0) {
-        return -1;
+    cJSON_AddStringToObject(request, "op", "SET_CONFIG");
+    cJSON_AddStringToObject(request, "source", source ? source : "netconf");
+    /* config_obj is transferred into the request; do NOT free it separately */
+    cJSON_AddItemToObject(request, "config", config_obj);
+
+    request_str = cJSON_PrintUnformatted(request);
+    if (!request_str) {
+        fprintf(stderr, "Failed to serialize JSON request\n");
+        goto cleanup;
     }
 
-    out = fdopen(tmp_fd, "w");
-    if (!out) {
-        close(tmp_fd);
-        unlink(tmp_template);
-        return -1;
+    if (zmq_send(socket, request_str, strlen(request_str), 0) < 0) {
+        fprintf(stderr, "[ZMQ] Failed to send request: %s\n", zmq_strerror(zmq_errno()));
+        goto cleanup;
     }
 
-    in = fopen(path, "r");
-    if (in) {
-        while ((read = getline(&line, &cap, in)) != -1) {
-            if (key_matches_line(line, key)) {
-                if (!replaced) {
-                    fprintf(out, "%s=%s\n", key, value);
-                    replaced = 1;
-                }
-                continue;
-            }
-            fputs(line, out);
-            if (line[read - 1] != '\n') {
-                fputc('\n', out);
-            }
+    size = zmq_recv(socket, buffer, sizeof(buffer) - 1, 0);
+    if (size < 0) {
+        if (zmq_errno() == EAGAIN) {
+            fprintf(stderr, "[ZMQ] Timeout waiting for response\n");
+        } else {
+            fprintf(stderr, "[ZMQ] Failed to receive response: %s\n", zmq_strerror(zmq_errno()));
         }
-        fclose(in);
-        in = NULL;
-    } else if (errno != ENOENT && errno != EACCES) {
         goto cleanup;
     }
 
-    if (!replaced) {
-        fprintf(out, "%s=%s\n", key, value);
-    }
-
-    fflush(out);
-    fsync(fileno(out));
-    fclose(out);
-    out = NULL;
-
-    if (rename(tmp_template, path) != 0) {
-        unlink(tmp_template);
+    buffer[size] = '\0';
+    response = cJSON_Parse(buffer);
+    if (!response) {
+        fprintf(stderr, "[ZMQ] Failed to parse response JSON\n");
         goto cleanup;
     }
 
-    (void)chmod(path, CONTROL_FILE_MODE);
-
-    ret = 0;
+    {
+        cJSON *status = cJSON_GetObjectItemCaseSensitive(response, "status");
+        if (cJSON_IsString(status) && status->valuestring && strcmp(status->valuestring, "OK") == 0) {
+            rc = 0;
+        } else {
+            cJSON *error_item = cJSON_GetObjectItemCaseSensitive(response, "error");
+            fprintf(stderr, "[ZMQ] Controller error: %s\n",
+                    cJSON_IsString(error_item) && error_item->valuestring ? error_item->valuestring : "Unknown");
+        }
+    }
 
 cleanup:
-    if (in) {
-        fclose(in);
+    if (response) {
+        cJSON_Delete(response);
     }
-    if (out) {
-        fclose(out);
-        unlink(tmp_template);
+    /* request owns config_obj via cJSON_AddItemToObject, so deleting request frees both */
+    if (request) {
+        cJSON_Delete(request);
     }
-    free(line);
-    return ret;
-}
-
-static int write_control_param(const char *key, const char *value)
-{
-    char lock_path[PATH_MAX];
-    char fallback_lock_path[PATH_MAX];
-    int lock_fd = -1;
-    int rc;
-
-    if (snprintf(lock_path, sizeof(lock_path), "%s.lock", CONTROL_FILE) >= (int)sizeof(lock_path)) {
-        return -1;
+    if (request_str) {
+        free(request_str);
     }
-    if (snprintf(fallback_lock_path, sizeof(fallback_lock_path), "%s.lock", FALLBACK_CONTROL_FILE) >= (int)sizeof(fallback_lock_path)) {
-        return -1;
+    if (socket) {
+        zmq_close(socket);
     }
-
-    lock_fd = open(lock_path, O_CREAT | O_RDWR, LOCK_FILE_MODE);
-    if (lock_fd < 0) {
-        lock_fd = open(fallback_lock_path, O_CREAT | O_RDWR, LOCK_FILE_MODE);
-        if (lock_fd < 0) {
-            return -1;
-        }
-    }
-
-    (void)fchmod(lock_fd, LOCK_FILE_MODE);
-
-    if (flock(lock_fd, LOCK_EX) != 0) {
-        close(lock_fd);
-        return -1;
-    }
-
-    rc = upsert_key_value_atomic(CONTROL_FILE, key, value);
-    if (rc != 0) {
-        rc = upsert_key_value_atomic(FALLBACK_CONTROL_FILE, key, value);
-    }
-
-    flock(lock_fd, LOCK_UN);
-    close(lock_fd);
 
     return rc;
 }
@@ -329,6 +243,14 @@ static int module_change_cb(sr_session_ctx_t *session,
         return SR_ERR_OK;
     }
 
+    /* Collect all changed params into a single cJSON object */
+    cJSON *config = cJSON_CreateObject();
+    if (!config) {
+        fprintf(stderr, "Failed to allocate config JSON object\n");
+        sr_free_change_iter(it);
+        return SR_ERR_OK;
+    }
+
     while (sr_get_change_next(session, it, &oper, &old_val, &new_val) == SR_ERR_OK) {
         if (new_val) {
             const char *leaf = leaf_from_xpath(new_val->xpath);
@@ -352,12 +274,20 @@ static int module_change_cb(sr_session_ctx_t *session,
             }
 
             if (key && format_sr_value(new_val, value_buf, sizeof(value_buf)) == 0) {
-                if (write_control_param(key, value_buf) != 0) {
-                    fprintf(stderr, "Failed to write %s=%s to control file\n", key, value_buf);
+                /* Add to config batch, auto-detecting numeric vs string */
+                char *endptr = NULL;
+                long int_val = strtol(value_buf, &endptr, 10);
+                if (endptr && *endptr == '\0') {
+                    cJSON_AddNumberToObject(config, key, (double)int_val);
                 } else {
-                    printf("WROTE %s=%s to control file\n", key, value_buf);
-                    fflush(stdout);
+                    double float_val = strtod(value_buf, &endptr);
+                    if (endptr && *endptr == '\0') {
+                        cJSON_AddNumberToObject(config, key, float_val);
+                    } else {
+                        cJSON_AddStringToObject(config, key, value_buf);
+                    }
                 }
+                printf("  queued: %s=%s\n", key, value_buf);
             } else if (!key) {
                 fprintf(stderr, "Ignoring unmapped leaf: %s\n", new_val->xpath);
             }
@@ -381,6 +311,21 @@ static int module_change_cb(sr_session_ctx_t *session,
     }
 
     sr_free_change_iter(it);
+
+    /* Send batch only if there is at least one param */
+    int param_count = cJSON_GetArraySize(config);
+    if (param_count > 0) {
+        /* config ownership transferred to zmq_set_config; it will be freed there */
+        if (zmq_set_config(config, "netconf") != 0) {
+            fprintf(stderr, "Failed to send SET_CONFIG via ZMQ\n");
+        } else {
+            printf("ZMQ SET_CONFIG sent (%d param(s))\n", param_count);
+            fflush(stdout);
+        }
+    } else {
+        cJSON_Delete(config);
+    }
+
     return SR_ERR_OK;
 }
 
@@ -389,6 +334,12 @@ int main() {
     sr_session_ctx_t *session = NULL;
     sr_subscription_ctx_t *subscription = NULL;
     int rc;
+
+    zmq_context = zmq_ctx_new();
+    if (!zmq_context) {
+        fprintf(stderr, "Failed to initialize ZMQ context\n");
+        return 1;
+    }
 
     printf("Connecting to sysrepo...\n");
     rc = sr_connect(0, &conn);

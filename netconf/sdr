@@ -6,6 +6,19 @@ VALUE=$3
 
 TMPFILE=/tmp/sdr_tmp.json
 
+# Map user-friendly names to YANG leaf names.
+case "$PARAM" in
+  noise)
+    PARAM="noise_level"
+    ;;
+  rate)
+    PARAM="packet_rate"
+    ;;
+  frequency)
+    PARAM="frequency_offset"
+    ;;
+esac
+
 if [ "$CMD" = "set" ]; then
     cat > $TMPFILE <<EOF
 {
@@ -23,7 +36,9 @@ elif [ "$CMD" = "show" ]; then
 else
     echo "Usage:"
     echo "./sdr set tx_gain 40"
+  echo "./sdr set noise 0.01            # alias for noise_level"
     echo "./sdr set noise_level 0.01"
-    echo "./sdr set frequency 2450000000"
+  echo "./sdr set rate 100              # alias for packet_rate"
+  echo "./sdr set frequency_offset 5000"
     echo "./sdr show"
 fi
