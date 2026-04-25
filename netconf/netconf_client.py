@@ -205,7 +205,7 @@ class SDRNetconfClient:
         """
         self.set_config({key: value})
 
-    def set_config(self, params: dict) -> None:
+    def set_config(self, params: dict | str, value=None) -> None:
         """
         Apply multiple PHY parameters in a single ``<edit-config>``.
 
@@ -213,7 +213,13 @@ class SDRNetconfClient:
         to values, matching the format used by the rest of the stack::
 
             client.set_config({"noise": 0.02, "rate": 200, "mod_scheme": 1})
+
+        For convenience, a single key/value pair is also accepted::
+
+            client.set_config("mod_scheme", 2)
         """
+        if isinstance(params, str):
+            params = {params: value}
         config_xml = _edit_config_xml(params)
         self._mgr.edit_config(target="running", config=config_xml)
 
@@ -260,6 +266,9 @@ class SDRNetconfClient:
 # -----------------------------------------------------------------
 # CLI
 # -----------------------------------------------------------------
+
+# Backwards-compatible alias used by ad-hoc scripts.
+NetconfClient = SDRNetconfClient
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
